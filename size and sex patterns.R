@@ -167,7 +167,7 @@ if (Export.dat=="YES")
   table(TRAWL$SPECIES) #no duskies, only sandbars 
   Trawl_sandbar=subset(TRAWL,SPECIES=="TK")
   hist(Trawl_sandbar$FL)
-  write.csv(Trawl_sandbar,"C:/Matias/Data/Size_composition/Pilbara_Trawl_sandbar.csv",row.names=F)
+  write.csv(Trawl_sandbar,"C:/Matias/Analyses/Data_outs/Sandbar shark_Size_composition_Pilbara_Trawl.csv",row.names=F)
   
   North.LONGLINE=subset(DATA,Method=="LL" & LAT>-25 & !BOAT%in%c("HAM","HOU","NAT","FLIN",
                                                                  "RV BREAKSEA","RV Gannet","RV GANNET","RV SNIPE 2"))
@@ -175,11 +175,11 @@ if (Export.dat=="YES")
   
   North.LONGLINE_sandbar=subset(North.LONGLINE,SPECIES=="TK")
   hist(North.LONGLINE_sandbar$FL)
-  write.csv(North.LONGLINE_sandbar,"C:/Matias/Data/Size_composition/NSF.LONGLINE_sandbar.csv",row.names=F)
+  write.csv(North.LONGLINE_sandbar,"C:/Matias/Analyses/Data_outs/Sandbar shark_Size_composition_NSF.LONGLINE.csv",row.names=F)
   
   North.LONGLINE_dusky=subset(North.LONGLINE,SPECIES=="BW")
   hist(North.LONGLINE_dusky$FL)
-  write.csv(North.LONGLINE_dusky,"C:/Matias/Data/Size_composition/NSF.LONGLINE_dusky.csv",row.names=F)
+  write.csv(North.LONGLINE_dusky,"C:/Matias/Analyses/Data_outs/Dusky shark_Size_composition_NSF.LONGLINE.csv",row.names=F)
   
   write.csv(DATA,"C:/Matias/Analyses/Size and sex patterns/DATA.csv",row.names=F)
   
@@ -480,7 +480,7 @@ for(i in 1:length(Out.size.TK)) Out.size.TK[[i]]=fn.size.comp(subset(Out.size.TK
 #2.3 Export data
 if (Export.dat=="YES")
 {
-  setwd("C:/Matias/Data/Size_composition")
+  setwd("C:/Matias/Analyses/Data_outs")
   x=".Table.6.5.and.7.inch.csv"
   
   #raw by zone
@@ -494,15 +494,15 @@ if (Export.dat=="YES")
                               paste(year-1,"-",fn.subs(year),sep="")))
       a_6.5=subset(a,!is.na(FL) & MESH_SIZE=="6.5",select=c(Month,FINYEAR,year,FL,SEX))
       a_7=subset(a,!is.na(FL) & MESH_SIZE=="7",select=c(Month,FINYEAR,year,FL,SEX))
-      write.csv(a_6.5,paste(SP,nm,".6.5.inch.raw.csv",sep=""),row.names=F)
-      write.csv(a_7,paste(SP,nm,".7.inch.raw.csv",sep=""),row.names=F)
+      write.csv(a_6.5,paste(getwd(),'/',SP,'/',SP,"_Size_composition_",nm,".6.5.inch.raw.csv",sep=""),row.names=F)
+      write.csv(a_7,paste(getwd(),'/',SP,'/',SP,"_Size_composition_",nm,".7.inch.raw.csv",sep=""),row.names=F)
     }
     
   }
-  fn.exp.size(WH.size,"Whiskery.")
-  fn.exp.size(GM.size,"Gummy.")
-  fn.exp.size(BW.size,"Dusky.")
-  fn.exp.size(TK.size,"Sandbar.")
+  fn.exp.size(WH.size,"Whiskery shark")
+  fn.exp.size(GM.size,"Gummy shark")
+  fn.exp.size(BW.size,"Dusky shark")
+  fn.exp.size(TK.size,"Sandbar shark")
   
   #table of observations and shots
   fn.table.shots=function(dat,SP)
@@ -530,12 +530,12 @@ if (Export.dat=="YES")
       b[[x]]=this
     }
     
-    write.csv(do.call(rbind,b),paste(SP,"Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
+    write.csv(do.call(rbind,b),paste(getwd(),'/',SP,'/',SP,"_Size_composition_Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
   }
-  fn.table.shots(WH.size,"Whiskery.")
-  fn.table.shots(GM.size,"Gummy.")
-  fn.table.shots(BW.size,"Dusky.")
-  fn.table.shots(TK.size,"Sandbar.")
+  fn.table.shots(WH.size,"Whiskery shark")
+  fn.table.shots(GM.size,"Gummy shark")
+  fn.table.shots(BW.size,"Dusky shark")
+  fn.table.shots(TK.size,"Sandbar shark")
   
   #Composition data by zone
   for(i in 1:length(Out.size.WH)) 
@@ -543,22 +543,22 @@ if (Export.dat=="YES")
     a=Out.size.WH[[i]]
     a=as.data.frame.matrix(a)
     a$FINYEAR=rownames(a)
-    write.table(a,paste("Whiskery.",names(Out.size.WH)[i],x,sep=""),sep = ",",row.names=F)
+    write.table(a,paste(getwd(),"/Whiskery shark/Whiskery shark_Size_composition_",names(Out.size.WH)[i],x,sep=""),sep = ",",row.names=F)
     
     a=Out.size.GM[[i]]
     a=as.data.frame.matrix(a)
     a$FINYEAR=rownames(a)
-    write.table(a,paste("Gummy.",names(Out.size.GM)[i],x,sep=""),sep = ",",row.names=F)
+    write.table(a,paste(getwd(),"/Gummy shark/Gummy shark_Size_composition_",names(Out.size.GM)[i],x,sep=""),sep = ",",row.names=F)
     
     a=Out.size.BW[[i]]
     a=as.data.frame.matrix(a)
     a$FINYEAR=rownames(a)
-    write.table(a,paste("Dusky.",names(Out.size.BW)[i],x,sep=""),sep = ",",row.names=F)
+    write.table(a,paste(getwd(),"/Dusky shark/Dusky shark_Size_composition_",names(Out.size.BW)[i],x,sep=""),sep = ",",row.names=F)
     
     a=Out.size.TK[[i]]
     a=as.data.frame.matrix(a)
     a$FINYEAR=rownames(a)
-    write.table(a,paste("Sandbar.",names(Out.size.TK)[i],x,sep=""),sep = ",",row.names=F)
+    write.table(a,paste(getwd(),"/Sandbar shark/Sandbar shark_Size_composition_",names(Out.size.TK)[i],x,sep=""),sep = ",",row.names=F)
   }
   
   
@@ -725,8 +725,8 @@ par(mfcol=c(3,2),mai=c(0.1,.1,0.15,.01),oma=c(3,3,0.15,0.01))
 fn.diversity(subset(DATA,Method=="GN"),"Gillnet")
 
 fn.diversity(subset(DATA,Method=="LL"),"Longline")
-mtext("Longitude (°E)",side=1,line=1.6,font=1,las=0,cex=1.4,outer=T)
-mtext("Latitude (°S)",side=2,line=1,font=1,las=0,cex=1.4,outer=T)
+mtext("Longitude (?E)",side=1,line=1.6,font=1,las=0,cex=1.4,outer=T)
+mtext("Latitude (?S)",side=2,line=1,font=1,las=0,cex=1.4,outer=T)
 dev.off()
 
 
@@ -1187,7 +1187,7 @@ par(mfcol=c(4,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
 for(i in 1:length(This.sp))Small.scale.LAT(subset(DATA,SPECIES==This.sp[[i]] & !is.na(FL) &
                                                 !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
 mtext("Fork length (cm)",2,line=0.25,las=3,cex=1.25,outer=T)
-mtext("Latitude (°S)",1,line=0.5,cex=1.25,outer=T)
+mtext("Latitude (?S)",1,line=0.5,cex=1.25,outer=T)
 dev.off() 
 
 
@@ -1669,8 +1669,8 @@ for(i in 1:length(Output.GLM))
   }
 }
 
-mtext("Longitude (°E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
-mtext("Latitude (°S)",side=2,line=0.725,font=1,las=0,cex=1.15,outer=T)
+mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
+mtext("Latitude (?S)",side=2,line=0.725,font=1,las=0,cex=1.15,outer=T)
 dev.off()
 
 
@@ -2104,8 +2104,8 @@ for(t in 1:length(Zn.leg))
 }
 box(col="white")
 
-mtext("Longitude (°E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
-mtext("Latitude (°S)",side=2,line=0.55,font=1,las=0,cex=1.15,outer=T)
+mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
+mtext("Latitude (?S)",side=2,line=0.55,font=1,las=0,cex=1.15,outer=T)
 dev.off()
 
 
@@ -2332,8 +2332,8 @@ for (i in 1:length(ID))
   
 }
 
-mtext("Longitude (°E)",side=1,line=-1.125,font=1,las=0,cex=1.7,outer=T)
-mtext("Latitude (°S)",side=2,line=-1.5,font=1,las=0,cex=1.7,outer=T)
+mtext("Longitude (?E)",side=1,line=-1.125,font=1,las=0,cex=1.7,outer=T)
+mtext("Latitude (?S)",side=2,line=-1.5,font=1,las=0,cex=1.7,outer=T)
 dev.off()
 
 
