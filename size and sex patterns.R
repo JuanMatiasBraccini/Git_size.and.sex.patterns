@@ -8,101 +8,247 @@ library(plotrix)
 library(lme4) #mixed models
 library(vegan)
 library(ReporteRs)
+library(dplyr)
+library(Hmisc)
 
 #controls
 
-Export.dat="NO"   #set to yes if exporting size data for population dynamics
-
+Export.dat="YES"   #exporting size data for population dynamics
+do.paper=FALSE
 
 #DATA SECTION
 
 #Sharks data base  
 User="Matias"
-source("C:/Matias/Analyses/SOURCE_SCRIPTS/Source_Shark_bio.R")
+source('C:/Matias/Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R')
 
-#Southern Oscillation Index
-SOI=read.csv("C:/Matias/Data/SOI.1975_2013.csv")
+if(do.paper)
+{
+  #Southern Oscillation Index
+  SOI=read.csv("C:/Matias/Data/SOI.1975_2013.csv")
+  
+  #Mean Freo sea level
+  Freo=read.csv("C:/Matias/Data/Freo_mean_sea_level.csv")
+  names(Freo)[3]="Freo"
+  
+  #Sea Surface Temperature
+  Temperature=read.csv("C:/Matias/Data/SST.nice.format.csv")
+  
+  
+  #Shark zones
+  library(rgdal)
+  JA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/JA_Northern_Shark.shp", layer="JA_Northern_Shark") 
+  WA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthCoastShark_s43.shp", layer="NorthCoastShark_s43") 
+  WA_Northern_Shark_2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthWestCoastShark_s43.shp", layer="NorthWestCoastShark_s43") 
+  SDGDLL_zone1=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone1.shp", layer="SDGDLL_zone1") 
+  SDGDLL_zone2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone2.shp", layer="SDGDLL_zone2") 
+  WCDGDLL=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/WCDGDLL.shp", layer="WCDGDLL") 
+  
+  Current.year=2016
+}
 
-#Mean Freo sea level
-Freo=read.csv("C:/Matias/Data/Freo_mean_sea_level.csv")
-names(Freo)[3]="Freo"
-
-#Sea Surface Temperature
-Temperature=read.csv("C:/Matias/Data/SST.nice.format.csv")
 
 
-#Shark zones
-library(rgdal)
-JA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/JA_Northern_Shark.shp", layer="JA_Northern_Shark") 
-WA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthCoastShark_s43.shp", layer="NorthCoastShark_s43") 
-WA_Northern_Shark_2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthWestCoastShark_s43.shp", layer="NorthWestCoastShark_s43") 
-SDGDLL_zone1=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone1.shp", layer="SDGDLL_zone1") 
-SDGDLL_zone2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone2.shp", layer="SDGDLL_zone2") 
-WCDGDLL=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/WCDGDLL.shp", layer="WCDGDLL") 
-
-
-Current.year=2016
 
 
 #PROCEDURE SECTION
+fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
 
 
 #Export data for bycatch study
-write.csv(DATA,"C:/Matias/Analyses/Bycatch/Shark-bycatch/WA.csv",row.names=F)
+write.csv(DATA,"C:/Matias/Analyses/Ecosystem indices and multivariate/Shark-bycatch/WA.csv",row.names=F)
 
 
 
 #Add Freo, SOI and Temperature
-DATA=merge(DATA,SOI, by.x=c("Month","year"),by.y=c("Month.soi","Year.soi"),all.x=T)
-DATA=merge(DATA,Freo, by.x=c("Month","year"),by.y=c("Month","Year"),all.x=T)
-DATA=merge(DATA,Temperature, by.x=c("Month","year","Lat.round","Long.round"),by.y=c("Month","Year","Lat","Long"),all.x=T)
-
+if(do.paper)
+{
+  DATA=merge(DATA,SOI, by.x=c("Month","year"),by.y=c("Month.soi","Year.soi"),all.x=T)
+  DATA=merge(DATA,Freo, by.x=c("Month","year"),by.y=c("Month","Year"),all.x=T)
+  DATA=merge(DATA,Temperature, by.x=c("Month","year","Lat.round","Long.round"),by.y=c("Month","Year","Lat","Long"),all.x=T)
+}
 
 #Select Species
-Sks=c("AA","BSG","BT","BW","CA","CP","ES","GB","GG","GM","GN","HH","HS","HZ","LE","LG",
-      "MI","MS","OF","PE","PJ","PN","SD","SI","SO","SW","TG","TK","TN","TS","WB",
-      "WC","WD","WH","WP","WS","WW","BN","BU","BX","GF","GR","HG","HW","LP","NS","PC",
-      "RB","RW","SC","SF","SN","WE","WG","ZE")
-
-Commercial.Sks=c("BW","GM","TK","WH")
-
-DATA=subset(DATA,SPECIES%in%Sks)
-Sks=unique(DATA$SPECIES)
-
-
-Table.soak=aggregate(SOAK.TIME~Method,DATA,mean,na.rm=T)
-Table.methods=table(DATA$Method,useNA='ifany')
-
-#Add effort accordingly (hook-hours for LL, km-gn-hour for GN)  INCOMPLETE! fix some netlengths, etc
-#DATA$Effort=with(DATA,ifelse(Method=="LL",SOAK.TIME*,ifelse(Method=="GN",SOAK.TIME*NET_LENGTH,NA)))
-
-#Get mid point of block
-DATA$LAT=-as.numeric(with(DATA,ifelse(!is.na(Mid.Lat),substr(Mid.Lat,2,3),substr(BLOCK,1,2))))
-DATA$LONG=as.numeric(with(DATA,ifelse(!is.na(Mid.Long),substr(Mid.Long,1,3),substr(BLOCK,3,4))))
+if(do.paper)
+{
+  Sks=c("AA","BSG","BT","BW","CA","CP","ES","GB","GG","GM","GN","HH","HS","HZ","LE","LG",
+        "MI","MS","OF","PE","PJ","PN","SD","SI","SO","SW","TG","TK","TN","TS","WB",
+        "WC","WD","WH","WP","WS","WW","BN","BU","BX","GF","GR","HG","HW","LP","NS","PC",
+        "RB","RW","SC","SF","SN","WE","WG","ZE")
+  DATA=subset(DATA,SPECIES%in%Sks)
+}
+id.scalies=grep(".T",DATA$SPECIES)
+scalies=DATA[id.scalies,]
+DATA=DATA[-id.scalies,]
 
 
-#Average block depth
-Aver.depth=aggregate(BOTDEPTH~BLOCK,DATA,mean)
-names(Aver.depth)[2]="BlockMeanDepth"
-DATA=merge(DATA,Aver.depth,by="BLOCK",all.x=T)
+if(do.paper)
+{
+  Commercial.Sks=c("BW","GM","TK","WH")
+  Sks=unique(DATA$SPECIES)
+  write.csv(DATA,"C:/Matias/Analyses/Size and sex patterns/DATA.csv",row.names=F)
+}
 
 
-#Number of males and females by zone for commercial sp
-a=subset(DATA,SPECIES%in%Commercial.Sks)
-table(a$zone,a$SEX,as.character(a$SPECIES))
-rm(a)
-DATA=subset(DATA,year<=Current.year)
+#Extract data for pop din model and predict NA FL if TL available
+LH=read.csv('C:/Matias/Data/Life history parameters/Life_History.csv')
+All.species.names=read.csv("C:/Matias/Data/Species_names_shark.only.csv")
+All.species.names=All.species.names%>%
+  mutate(Name=tolower(Name))%>%
+  rename(SNAME=Name)
+
+Res.vess=c('FLIN','NAT',"HAM","HOU","RV BREAKSEA","RV Gannet","RV GANNET","RV SNIPE 2")
+Keep.species=c("copper shark","dusky shark","great hammerhead","grey nurse shark","gummy shark",
+               "lemon shark","milk shark","pigeye shark","sandbar shark","sawsharks",
+               "scalloped hammerhead","shortfin mako","smooth hammerhead","spinner shark",
+               "spurdogs","tiger shark","whiskery shark","wobbegongs")
+
+DATA.pop.din=DATA%>%
+      filter(!BOAT%in%Res.vess)%>%
+      rename(SP=SPECIES)%>%
+      dplyr::select(SHEET_NO,SP,FL,TL,SEX,Month,year,BOAT,MESH_SIZE,Method,LAT,LONG,zone)%>%
+      left_join(All.species.names%>%
+                  dplyr::select(SPECIES,SNAME,SP),by='SP')%>%
+      left_join(LH%>%dplyr::select(SPECIES,a_FL.to.TL,b_FL.to.TL,Max.TL),
+                by="SPECIES")%>%
+      mutate(FINYEAR=ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
+                            paste(year-1,"-",fn.subs(year),sep="")),
+             FL=ifelse(is.na(FL),(TL-b_FL.to.TL)/a_FL.to.TL,FL))%>%
+      filter(!is.na(FL))%>%
+      filter(FL<Max.TL)%>%
+      mutate(SNAME=ifelse(SNAME=="common sawshark","sawsharks",SNAME),
+             MESH_SIZE=ifelse(MESH_SIZE=="10\"","10",
+                       ifelse(MESH_SIZE=="6\"","6",
+                       ifelse(MESH_SIZE=="5\r\n5","5",
+                       ifelse(MESH_SIZE=="7\"","7",
+                       ifelse(MESH_SIZE=="5\"","5",
+                       ifelse(MESH_SIZE=="4\"","4",
+                       ifelse(MESH_SIZE=="8\"","8",
+                       MESH_SIZE))))))),
+             MESH_SIZE=as.numeric(MESH_SIZE))%>%
+      filter(SNAME%in%Keep.species)
+
+#ACA
+#Export size frequency other gears data for population dynamics modelling
+if (Export.dat=="YES")
+{
+  hndl='C:/Matias/Analyses/Data_outs/'
+  for(s in 1:length(Keep.species))
+  {
+    dd1=DATA.pop.din%>%filter(SNAME==Keep.species[s])
+    NN=capitalize(Keep.species[s])
+    if(nrow(dd1)>0)
+    {
+      gn=dd1%>%filter(Method=="GN" & LAT<(-25))
+      if(nrow(gn)>0)
+      {
+        #raw by zone
+        zn=unique(gn$zone)
+        for(x in 1:length(zn))
+        {
+          nm=zn[x]
+          a=gn%>%filter(zone==zn[x])
+          a_6.5=subset(a,!is.na(FL) & MESH_SIZE=="6.5",select=c(Month,FINYEAR,year,FL,SEX))
+          a_7=subset(a,!is.na(FL) & MESH_SIZE=="7",select=c(Month,FINYEAR,year,FL,SEX))
+          if(nrow(a_6.5)>0)write.csv(a_6.5,paste(hndl,'/',NN,'/',NN,"_Size_composition_",nm,".6.5.inch.raw.csv",sep=""),row.names=F)
+          if(nrow(a_7)>0)write.csv(a_7,paste(hndl,'/',NN,'/',NN,"_Size_composition_",nm,".7.inch.raw.csv",sep=""),row.names=F)
+        }
+        
+        #table of observations
+        fn.table.shots=function(dat,SP)
+        {
+          zn=unique(dat$zone)
+          b=vector('list',length(zn))
+          for(x in 1:length(zn))
+          {
+            a=gn%>%filter(zone==zn[x] & !is.na(FL))
+            a$Number=1
+            Obs=aggregate(Number~FINYEAR,a,sum)
+            a$Dup=paste(a$year,a$Month,a$SHEET_NO)
+            bb=a[!duplicated(a$Dup),]
+            bb$Number=1
+            Shots=aggregate(Number~FINYEAR,bb,sum)
+            this=merge(Obs,Shots,by="FINYEAR")
+            names(this)[2:3]=c("N.observations","N.shots")
+            this$Species=unique(a$SPECIES)
+            this$Fishery="TDGDLF"
+            this$zone=zn[x]
+            b[[x]]=this
+          }
+          write.csv(do.call(rbind,b),paste(hndl,'/',SP,'/',SP,"_Size_composition_Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
+        }
+        fn.table.shots(dat=gn,SP=NN)
+      }
+      ll=dd1%>%filter(Method=="LL" & LAT>=(-25)) 
+      if(nrow(ll)>0)
+      {
+        ll=ll%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        write.csv(ll,paste(hndl,NN,'/',NN,
+                           "_Size_composition_NSF.LONGLINE.csv",sep=''),row.names=F)
+        
+      }
+      dl=dd1%>%filter(Method=="DL") 
+      if(nrow(dl)>0)
+      {
+        dl=dl%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        write.csv(dl,paste(hndl,NN,'/',NN,
+                           "_Size_composition_dropline.csv",sep=''),row.names=F)
+      }
+      tr=dd1%>%filter(Method=="TW") 
+      if(nrow(tr)>0)
+      {
+        tr=tr%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        write.csv(tr,paste(hndl,NN,'/',NN,
+                           "_Size_composition_Pilbara_Trawl.csv",sep=''),row.names=F)
+      }
+      rm(gn,ll,tr,dl)
+    }
+  }
+
+  #Export gillnet data for mean weight analysis
+  Dat.weight.an=subset(DATA,Method=="GN" & MESH_SIZE%in%c("6","6.5","7"))
+  write.csv(Dat.weight.an,"C:/Matias/Analyses/Catch and effort/Survey.weight.csv",row.names=F)
+  
+}
+
+
+if(do.paper)
+{
+  Table.soak=aggregate(SOAK.TIME~Method,DATA,mean,na.rm=T)
+  Table.methods=table(DATA$Method,useNA='ifany')
+  
+  #Add effort accordingly (hook-hours for LL, km-gn-hour for GN)  INCOMPLETE! fix some netlengths, etc
+  #DATA$Effort=with(DATA,ifelse(Method=="LL",SOAK.TIME*,ifelse(Method=="GN",SOAK.TIME*NET_LENGTH,NA)))
+  
+  #Get mid point of block
+  DATA$LAT=-as.numeric(with(DATA,ifelse(!is.na(Mid.Lat),substr(Mid.Lat,2,3),substr(BLOCK,1,2))))
+  DATA$LONG=as.numeric(with(DATA,ifelse(!is.na(Mid.Long),substr(Mid.Long,1,3),substr(BLOCK,3,4))))
+  
+  
+  #Average block depth
+  Aver.depth=aggregate(BOTDEPTH~BLOCK,DATA,mean)
+  names(Aver.depth)[2]="BlockMeanDepth"
+  DATA=merge(DATA,Aver.depth,by="BLOCK",all.x=T)
+  
+  
+  #Number of males and females by zone for commercial sp
+  a=subset(DATA,SPECIES%in%Commercial.Sks)
+  table(a$zone,a$SEX,as.character(a$SPECIES))
+  rm(a)
+  DATA=subset(DATA,year<=Current.year)
+  
+}
 
 
 #Proportion of neonate duskies in commercial gillnet catch 
 FL.dusky.neonate=82.5  #mid-point between max 0+ FL (93cm) and min 1+ FL (72cm) (Simpfendorfer et al 2002)
 Data.dusky=subset(DATA,Method=="GN" & MESH_SIZE%in%c("6.5","7") & SPECIES=="BW")
-FINYEARs=paste(1992:2012,"-",1993:2013,sep="")
-
 Data.dusky$Finyear=factor(with(Data.dusky,ifelse(Month%in%1:6,
             paste(year-1,"-",year,sep=""),ifelse(Month%in%7:12,paste(year,"-",year+1,sep=""),NA))),levels=FINYEARs)
-Data.dusky=subset(Data.dusky,!Finyear=="2013-2014")#remove 2013-2014 as there are only 3 observations
-
+TTa=with(subset(Data.dusky,!is.na(FL)),table(Finyear))
+names(TTa[which(TTa>20)])
+Data.dusky=subset(Data.dusky,Finyear%in%names(TTa[which(TTa>20)]))
+FINYEARs=levels(Data.dusky$Finyear)
 fn.prop.dus=function(FL.neo, min.obs, min.yrs)
 {
   a=subset(Data.dusky,!BLOCK==0)
@@ -149,7 +295,6 @@ fn.prop.dus=function(FL.neo, min.obs, min.yrs)
     if(q%in%c(4,7))axis(1,at=mp[seq(1,nrow(mp),2)],NMS[seq(1,nrow(mp),2)],tck=-0.06,cex.axis=1.25)
   }
 }
-
 tiff("C:/Matias/Analyses/Population dynamics/Prop.neonate.dusky.tiff",width = 2400, height = 2000,units = "px", res = 300,compression = "lzw")
 par(mfcol=c(4,2),mar=c(1,2,1,1),oma=c(3,3,.1,.1),las=1,mgp=c(2.5,.75,0),cex.axis=.8,cex.lab=1.1)
 fn.prop.dus(FL.dusky.neonate,min.obs=5,min.yrs=5)
@@ -160,843 +305,660 @@ dev.off()
 
 
 
-#Export size frequency other gears
-if (Export.dat=="YES")
+if(do.paper)
 {
-  TRAWL=subset(DATA,Method=="TW")
-  table(TRAWL$SPECIES) #no duskies, only sandbars 
-  Trawl_sandbar=subset(TRAWL,SPECIES=="TK")
-  hist(Trawl_sandbar$FL)
-  write.csv(Trawl_sandbar,"C:/Matias/Analyses/Data_outs/Sandbar shark_Size_composition_Pilbara_Trawl.csv",row.names=F)
-  
-  North.LONGLINE=subset(DATA,Method=="LL" & LAT>-25 & !BOAT%in%c("HAM","HOU","NAT","FLIN",
-                                                                 "RV BREAKSEA","RV Gannet","RV GANNET","RV SNIPE 2"))
-  table(North.LONGLINE$SPECIES) 
-  
-  North.LONGLINE_sandbar=subset(North.LONGLINE,SPECIES=="TK")
-  hist(North.LONGLINE_sandbar$FL)
-  write.csv(North.LONGLINE_sandbar,"C:/Matias/Analyses/Data_outs/Sandbar shark_Size_composition_NSF.LONGLINE.csv",row.names=F)
-  
-  North.LONGLINE_dusky=subset(North.LONGLINE,SPECIES=="BW")
-  hist(North.LONGLINE_dusky$FL)
-  write.csv(North.LONGLINE_dusky,"C:/Matias/Analyses/Data_outs/Dusky shark_Size_composition_NSF.LONGLINE.csv",row.names=F)
-  
-  write.csv(DATA,"C:/Matias/Analyses/Size and sex patterns/DATA.csv",row.names=F)
+  setwd("C:/Matias/Analyses/Size and sex patterns")
   
   
-  #Export gillnet data for mean weight analysis
-  Dat.weight.an=subset(DATA,Method=="GN" & MESH_SIZE%in%c("6","6.5","7"))
-  write.csv(Dat.weight.an,"C:/Matias/Analyses/Catch and effort/Survey.weight.csv",row.names=F)
-  
-}
-
-
-
-setwd("C:/Matias/Analyses/Size and sex patterns")
-
-
-#Table 1. Summary of numbers, size and sex ratios for all shark and ray species
-Tab1.fun=function(Spec)
-{
-  dat=subset(DATA,SPECIES==Spec)
+  #Table 1. Summary of numbers, size and sex ratios for all shark and ray species
+  Tab1.fun=function(Spec)
+  {
+    dat=subset(DATA,SPECIES==Spec)
     
-  #Numbers                
-  N.rel=length(dat$SPECIES)  
-  
-  #Size
-  FL.rel.min=FL.rel.max=NA
-  FL.rel.min=min(dat$FL,na.rm=T) 
-  FL.rel.max=max(dat$FL,na.rm=T) 
- 
-  #sex ratio 
-  Sex.rel=table(dat$SEX,useNA='ifany')
-  id.M=match("M",names(Sex.rel))
-  id.F=match("F",names(Sex.rel))
-  id.U=match("U",names(Sex.rel))
-  Rel.M=Rel.F=NA
-  Rel.M=Sex.rel[id.M]
-  Rel.F=Sex.rel[id.F]
-  Rel.U=Sex.rel[id.U]
-  
-  #Proportion by gear
-  Prop.gear=table(dat$Method)
-  Prop.gear.GN.LL=Prop.gear[match(c("GN","LL"),names(Prop.gear))]
-  Prop.gear.GN.LL=100*Prop.gear.GN.LL/sum(Prop.gear)
-  Prop.gear.GN=Prop.gear.GN.LL[1]
-  Prop.gear.LL=Prop.gear.GN.LL[2]
-  
-  return(list(N.rel=N.rel,FL.rel.min=FL.rel.min,FL.rel.max=FL.rel.max,
-              Rel.M=Rel.M,Rel.F=Rel.F,Rel.U=Rel.U,Prop.gear.LL=Prop.gear.LL,
-              Prop.gear.GN=Prop.gear.GN))
-  
-}
-Tabl1.list=vector('list',length(Sks))
-names(Tabl1.list)=Sks
-for (i in 1:length(Sks)) Tabl1.list[[i]]=Tab1.fun(Sks[i])
-
-Tabl1.matrix=matrix(nrow=length(Sks),ncol=length(Tabl1.list[[1]]))
-
-for (i in 1:length(Sks))Tabl1.matrix[i,]=do.call(cbind,Tabl1.list[[i]])
-colnames(Tabl1.matrix)=names(Tabl1.list[[1]])
-rownames(Tabl1.matrix)=Sks
-
-Tabl1.matrix=as.data.frame(Tabl1.matrix)
-Tabl1.matrix$Species=rownames(Tabl1.matrix)
-Tabl1.matrix=merge(Tabl1.matrix,SPECIES.names,by="Species")
-Tabl1.matrix=Tabl1.matrix[order(-Tabl1.matrix$N.rel),]
-names(Tabl1.matrix)=c("Code","N","FL.min","FL.max","N.male","N.female","N.unknown","LL","GN","Species","Scient.Name")
-Tabl1.matrix=Tabl1.matrix[,match(c("Species","Scient.Name","Code",
-                "FL.min","FL.max","N.male","N.female","N.unknown","N","LL","GN"),names(Tabl1.matrix))]
-Tabl1.matrix$N=Tabl1.matrix$N.male+Tabl1.matrix$N.female+Tabl1.matrix$N.unknown
-
-if (Export.dat=="YES") write.csv(Tabl1.matrix,"Table1.csv",row.names=F)
-
-
-#Overall Sex ratio ratio
-All.sp=Tabl1.matrix$Code 
-  
-Chi.squar=function(datos)
-{
-  X2=NA
-  TABLA=table(datos$SEX)
-  if(length(TABLA)>1) X2=chisq.test(TABLA)
-  return(X2)
-}
-Store.X2=data.frame(Code=All.sp,X2.p=NA)
-for(i in 1:length(All.sp))Store.X2[i,2]=Chi.squar(subset(DATA,SPECIES%in%All.sp[i]& SEX%in%c("M","F")))
-Store.X2$X2.p=ifelse(!is.na(Store.X2$X2.p),round(Store.X2$X2.p,3),Store.X2$X2.p)
-
-
-This.sp=names(Table.species)
-
-
-#Range analysis
-DATA=subset(DATA,!(SPECIES=="GM" & Mid.Lat>(-26)))
-DATA=subset(DATA,!BLOCK%in%c(2415,2315,2519))  #remove land blocks
-
-Lat.range=c(-36,-10)
-Long.range=c(112,129)
-fn.plot.sp=function(dat)plot(dat$LONG,dat$LAT,xlim=Long.range,ylim=Lat.range,main=This.sp[i])
-for(i in 1:length(This.sp))fn.plot.sp(subset(DATA,SPECIES==This.sp[i]))
-
-Table.Blok.Sp=table(DATA$SPECIES,DATA$BLOCK)
-Table.Blok.Sp=ifelse(Table.Blok.Sp>0,1,0)
-Table.Blok.Sp=data.frame(SPECIES=rownames(Table.Blok.Sp),N.blok=rowSums(Table.Blok.Sp))
-Table.Blok.Sp=subset(Table.Blok.Sp,SPECIES%in%names(Table.species[Table.species>=100]))
-Table.Blok.Sp=merge(Table.Blok.Sp,SPECIES.names,by.x="SPECIES",by.y="Species",all.x=T)
-
-  
-
-
-#Keep only gillnets of 6 to 7 inch mesh and LL
-Meshes=c("6","6.5","7")
-DATA=subset(DATA,Method%in%c("GN","LL"))
-DATA$Keep=with(DATA,ifelse(Method=="LL","YES",ifelse(MESH_SIZE %in%Meshes,"YES","NO")))
-DATA=subset(DATA,Keep=="YES")
-
-Table.mesh=table(DATA$MESH_SIZE)
-Table.mesh=round(Table.mesh/sum(Table.mesh),2)
-
-YRS=sort(unique(DATA$year))
-n.yrs=length(YRS)
-
-
-
-
-#2. Output commercial species FL data for 6.5 and 7 inch gillnet for population dynamics
-#2.1 Separate data by zone
-fn.byzone=function(a,coef.1,coef.2)
-{
-  a$ZONE=as.character(a$zone)
-  a$ZONE=with(a,ifelse(ZONE=="2","Zone2",ifelse(ZONE=="1","Zone1",ZONE)))
-  a$ZONE=with(a,ifelse(is.na(ZONE) & LONG>=116.5 & LAT<=(-26),"Zone2",
-       ifelse(is.na(ZONE) & LONG<116.5 & LAT<=(-33),"Zone1",
-       ifelse(is.na(ZONE) & LAT>(-33) & LAT<=(-26) & LONG<116.5,"WC",
-       ifelse(is.na(ZONE) & LAT>(-26) & LONG<114,"Closed",
-       ifelse(is.na(ZONE) & LAT>(-26) & LONG>=114 & LONG<123.75,"North",
-       ifelse(is.na(ZONE) & LAT>(-26) & LONG>=123.75,"Joint",ZONE)))))))
-  a=subset(a,!ZONE=="North")
-  
-  a$FL=with(a,ifelse(is.na(FL) & !is.na(TL),(TL-coef.1)/coef.2,FL))
-  zones=unique(a$ZONE)
-  Zones.size=vector('list',length(zones))
-  names(Zones.size)=zones
-  for(z in 1:length(Zones.size)) Zones.size[[z]]=subset(a,ZONE==zones[z])
-  return(Zones.size)  
-}
-#note: coef.1 and .2 derived in De Wysiecki and Braccini 2017
-WH.size=fn.byzone(subset(DATA,SPECIES=="WH" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
-                  coef.1=6.267,coef.2=1.063)
-GM.size=fn.byzone(subset(DATA,SPECIES=="GM" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
-                  coef.1=2.007,coef.2=1.019)
-BW.size=fn.byzone(subset(DATA,SPECIES=="BW" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
-                  coef.1=1.486,coef.2=1.202)
-TK.size=fn.byzone(subset(DATA,SPECIES=="TK" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
-                  coef.1=5.87,coef.2=1.129)
-
-
-#Export sex ratio of commercial species for population dynamcis
-Sex.list=list(WH.size,GM.size,BW.size,TK.size)
-names(Sex.list)=c("WH","GM","BW","TK")
-Zne.sx.Ratio=list(WH=NA,GM=NA,BW=NA,TK=NA)
-fn.Zne.sx.Ratio=function(dat)
-{
-  names(dat)[match(c("Zone2","West","Zone1"),names(dat))] =c("Zn2","WC","Zn1")
-  n=length(dat)
-  Stor=vector('list',n)
-  names(Stor)=names(dat)
-  for(i in 1:n)
-  {
-    aa=subset(dat[[i]],SEX%in%c("M","F"))
-    Stor[[i]]=table(aa$SEX)
-  }
-  return(Stor)
-}
-
-hndl="C:/Matias/Data/Population dynamics/Prop.males.in.catch/"
-if (Export.dat=="YES")
-{
-  for(q in 1:length(Zne.sx.Ratio))
-  {
-    Zne.sx.Ratio[[q]]= fn.Zne.sx.Ratio(Sex.list[[q]])
-    tab=do.call(rbind,Zne.sx.Ratio[[q]])
+    #Numbers                
+    N.rel=length(dat$SPECIES)  
     
-    tab.all=sum(tab[,2])/(sum(tab[,1])+sum(tab[,2]))
-    tab1=tab[,2]/(tab[,1]+tab[,2])
-    id=match(c("Zn1","Zn2","WC"),names(tab1))
-    tab1=matrix(tab1[id],ncol=3)
-    colnames(tab1)=c("Zn1","Zn2","WC")
-    write.csv(tab1,paste(hndl,"prop.males.",names(Zne.sx.Ratio)[q],".csv",sep=""),row.names=F)
-    write.csv(tab.all,paste(hndl,"prop.males.All.",names(Zne.sx.Ratio)[q],".csv",sep=""),row.names=F)
-  }
-}
-
-fn.Zne.sx.Ratio.yr=function(dat,NM)
-{
-  n=length(dat)
-  for(i in 1:n)
-  {
-    aa=subset(dat[[i]],SEX%in%c("M","F"))
-    dd=aggregate(Number~SEX+year,aa,sum)
-    wide <- reshape(dd, v.names = "Number", idvar = "SEX",
-                    timevar = "year", direction = "wide")
-    p.male=unlist(wide[2,2:ncol(wide)]/colSums(wide[,2:ncol(wide)]))
-    Yr=as.numeric(substr(names(p.male),8,18))
-    Mod=lm(p.male~Yr)
-    plot(Yr,p.male,pch=19,col=2,main=paste(NM,names(dat)[i]))
-    legend("topright",paste("slope signif=",round(anova(Mod)$"Pr(>F)"[1],4)),bty='n')
+    #Size
+    FL.rel.min=FL.rel.max=NA
+    FL.rel.min=min(dat$FL,na.rm=T) 
+    FL.rel.max=max(dat$FL,na.rm=T) 
+    
+    #sex ratio 
+    Sex.rel=table(dat$SEX,useNA='ifany')
+    id.M=match("M",names(Sex.rel))
+    id.F=match("F",names(Sex.rel))
+    id.U=match("U",names(Sex.rel))
+    Rel.M=Rel.F=NA
+    Rel.M=Sex.rel[id.M]
+    Rel.F=Sex.rel[id.F]
+    Rel.U=Sex.rel[id.U]
+    
+    #Proportion by gear
+    Prop.gear=table(dat$Method)
+    Prop.gear.GN.LL=Prop.gear[match(c("GN","LL"),names(Prop.gear))]
+    Prop.gear.GN.LL=100*Prop.gear.GN.LL/sum(Prop.gear)
+    Prop.gear.GN=Prop.gear.GN.LL[1]
+    Prop.gear.LL=Prop.gear.GN.LL[2]
+    
+    return(list(N.rel=N.rel,FL.rel.min=FL.rel.min,FL.rel.max=FL.rel.max,
+                Rel.M=Rel.M,Rel.F=Rel.F,Rel.U=Rel.U,Prop.gear.LL=Prop.gear.LL,
+                Prop.gear.GN=Prop.gear.GN))
     
   }
+  Tabl1.list=vector('list',length(Sks))
+  names(Tabl1.list)=Sks
+  for (i in 1:length(Sks)) Tabl1.list[[i]]=Tab1.fun(Sks[i])
   
-}
-for(q in 1:length(Zne.sx.Ratio))fn.Zne.sx.Ratio.yr(Sex.list[[q]],names(Sex.list)[q])
-
- rm(Sex.list) 
-
-
-
-
-#2.2 create composition bins
-fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
-fn.size.comp=function(dat,Min,Max,interval)
-{
-  dat=dat[order(dat$year),]
+  Tabl1.matrix=matrix(nrow=length(Sks),ncol=length(Tabl1.list[[1]]))
   
-  dat$FINYEAR=with(dat,ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
-                              paste(year-1,"-",fn.subs(year),sep="")))
+  for (i in 1:length(Sks))Tabl1.matrix[i,]=do.call(cbind,Tabl1.list[[i]])
+  colnames(Tabl1.matrix)=names(Tabl1.list[[1]])
+  rownames(Tabl1.matrix)=Sks
   
-  Rango=c(Min,Max)
-  SEQ=seq(Rango[1],Rango[2],interval)
-  dat$FL.bin=floor(dat$FL/interval)*interval
-  dat$FINYEAR=factor(dat$FINYEAR)
+  Tabl1.matrix=as.data.frame(Tabl1.matrix)
+  Tabl1.matrix$Species=rownames(Tabl1.matrix)
+  Tabl1.matrix=merge(Tabl1.matrix,SPECIES.names,by="Species")
+  Tabl1.matrix=Tabl1.matrix[order(-Tabl1.matrix$N.rel),]
+  names(Tabl1.matrix)=c("Code","N","FL.min","FL.max","N.male","N.female","N.unknown","LL","GN","Species","Scient.Name")
+  Tabl1.matrix=Tabl1.matrix[,match(c("Species","Scient.Name","Code",
+                                     "FL.min","FL.max","N.male","N.female","N.unknown","N","LL","GN"),names(Tabl1.matrix))]
+  Tabl1.matrix$N=Tabl1.matrix$N.male+Tabl1.matrix$N.female+Tabl1.matrix$N.unknown
   
-  #dat1=subset(dat,Mid.Lat<(-26) & Method=="GN" & MESH_SIZE=="7")
-  #dat2=subset(dat,Mid.Lat<(-26) & Method=="GN" & MESH_SIZE=="6.5")  
+  write.csv(Tabl1.matrix,"Table1.csv",row.names=F)
   
-  #Table.7.inch=with(dat1,table(FINYEAR,FL.bin))
-  #Table.6.5.inch=with(dat2,table(FINYEAR,FL.bin))
-  Table.6.5.and.7.inch=with(dat,table(FINYEAR,FL.bin))
   
-  return(Table.6.5.and.7.inch)
-  #   return(list(Table.7.inch=Table.7.inch,Table.6.5.inch=Table.6.5.inch,
-  #               Table.6.5.and.7.inch=Table.6.5.and.7.inch))
-}
-
-Out.size.WH=WH.size
-Out.size.GM=GM.size
-Out.size.BW=BW.size
-Out.size.TK=TK.size
-
-Comm.sp=c("BW","TK","GM","WH")
-Min.FL=c(56,42,23,15)  #FL at birth
-Max.FL= c(310,200,170,150)  #max FL   
-
-#By zone
-for(i in 1:length(Out.size.WH)) Out.size.WH[[i]]=fn.size.comp(subset(Out.size.WH[[i]],
-                          FL<=Max.FL[4]& FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
-
-for(i in 1:length(Out.size.GM)) Out.size.GM[[i]]=fn.size.comp(subset(Out.size.GM[[i]],
-                          FL<=Max.FL[3] & FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
-
-for(i in 1:length(Out.size.BW)) Out.size.BW[[i]]=fn.size.comp(subset(Out.size.BW[[i]],
-                          FL<=Max.FL[1] & FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)
-
-for(i in 1:length(Out.size.TK)) Out.size.TK[[i]]=fn.size.comp(subset(Out.size.TK[[i]],
-                          FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
-
-# #By zone and sex
-# Out.size.WH.m=Out.size.WH.f=WH.size
-# Out.size.GM.m=Out.size.GM.f=GM.size
-# Out.size.BW.m=Out.size.BW.f=BW.size
-# Out.size.TK.m=Out.size.TK.f=TK.size
-# 
-# for(i in 1:length(Out.size.WH)) 
-# {
-#   Out.size.WH.m[[i]]=fn.size.comp(subset(Out.size.WH[[i]],SEX=='M' & FL<=Max.FL[4] & FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
-#   Out.size.WH.f[[i]]=fn.size.comp(subset(Out.size.WH[[i]],SEX=='F' & FL<=Max.FL[4] & FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
-# }
-# 
-# 
-# for(i in 1:length(Out.size.GM))
-# {
-#   Out.size.GM.m[[i]]=fn.size.comp(subset(Out.size.GM[[i]],SEX=='M' & FL<=Max.FL[3]& FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
-#   Out.size.GM.f[[i]]=fn.size.comp(subset(Out.size.GM[[i]],SEX=='F' & FL<=Max.FL[3]& FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
-# }
-# 
-# for(i in 1:length(Out.size.BW))
-# {
-#   Out.size.BW.m[[i]]=fn.size.comp(subset(Out.size.BW[[i]],SEX=='M' & FL<=Max.FL[1]& FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)  
-#   Out.size.BW.f[[i]]=fn.size.comp(subset(Out.size.BW[[i]],SEX=='F' & FL<=Max.FL[1]& FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)  
-# }
-# 
-# 
-# for(i in 1:length(Out.size.TK))
-# {
-#   Out.size.TK.m[[i]]=fn.size.comp(subset(Out.size.TK[[i]],SEX=='M' & FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
-#   Out.size.TK.f[[i]]=fn.size.comp(subset(Out.size.TK[[i]],SEX=='F' & FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
-# }
-
-
-#2.3 Export data
-if (Export.dat=="YES")
-{
-  setwd("C:/Matias/Analyses/Data_outs")
-  x=".Table.6.5.and.7.inch.csv"
+  #Overall Sex ratio ratio
+  All.sp=Tabl1.matrix$Code 
   
-  #raw by zone
-  fn.exp.size=function(dat,SP)        
+  Chi.squar=function(datos)
   {
-    for(x in 1:length(dat))
-    {
-      nm=names(dat)[x]
-      a=dat[[x]]
-      a$FINYEAR=with(a,ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
-                              paste(year-1,"-",fn.subs(year),sep="")))
-      a_6.5=subset(a,!is.na(FL) & MESH_SIZE=="6.5",select=c(Month,FINYEAR,year,FL,SEX))
-      a_7=subset(a,!is.na(FL) & MESH_SIZE=="7",select=c(Month,FINYEAR,year,FL,SEX))
-      write.csv(a_6.5,paste(getwd(),'/',SP,'/',SP,"_Size_composition_",nm,".6.5.inch.raw.csv",sep=""),row.names=F)
-      write.csv(a_7,paste(getwd(),'/',SP,'/',SP,"_Size_composition_",nm,".7.inch.raw.csv",sep=""),row.names=F)
-    }
-    
+    X2=NA
+    TABLA=table(datos$SEX)
+    if(length(TABLA)>1) X2=chisq.test(TABLA)
+    return(X2)
   }
-  fn.exp.size(WH.size,"Whiskery shark")
-  fn.exp.size(GM.size,"Gummy shark")
-  fn.exp.size(BW.size,"Dusky shark")
-  fn.exp.size(TK.size,"Sandbar shark")
-  
-  #table of observations and shots
-  fn.table.shots=function(dat,SP)
-  {
-    b=vector('list',length(dat))
-    for(x in 1:length(dat))
-    {
-      a=dat[[x]]
-      #names(a)[match('CALCULATED FL',names(a))]='CALCULATED.FL'
-      #a$FL=with(a,ifelse(is.na(FL),CALCULATED.FL,FL))
-      a$FINYEAR=with(a,ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
-                              paste(year-1,"-",fn.subs(year),sep="")))
-      a=subset(a,!is.na(FL))    
-      a$Number=1
-      Obs=aggregate(Number~FINYEAR,a,sum)
-      a$Dup=paste(a$year,a$Month,a$SHEET_NO)
-      bb=a[!duplicated(a$Dup),]
-      bb$Number=1
-      Shots=aggregate(Number~FINYEAR,bb,sum)
-      this=merge(Obs,Shots,by="FINYEAR")
-      names(this)[2:3]=c("N.observations","N.shots")
-      this$Species=unique(a$SPECIES)
-      this$Fishery="TDGDLF"
-      this$zone=names(dat)[x]
-      b[[x]]=this
-    }
-    
-    write.csv(do.call(rbind,b),paste(getwd(),'/',SP,'/',SP,"_Size_composition_Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
-  }
-  fn.table.shots(WH.size,"Whiskery shark")
-  fn.table.shots(GM.size,"Gummy shark")
-  fn.table.shots(BW.size,"Dusky shark")
-  fn.table.shots(TK.size,"Sandbar shark")
-  
-  #Composition data by zone
-  for(i in 1:length(Out.size.WH)) 
-  {
-    a=Out.size.WH[[i]]
-    a=as.data.frame.matrix(a)
-    a$FINYEAR=rownames(a)
-    write.table(a,paste(getwd(),"/Whiskery shark/Whiskery shark_Size_composition_",names(Out.size.WH)[i],x,sep=""),sep = ",",row.names=F)
-    
-    a=Out.size.GM[[i]]
-    a=as.data.frame.matrix(a)
-    a$FINYEAR=rownames(a)
-    write.table(a,paste(getwd(),"/Gummy shark/Gummy shark_Size_composition_",names(Out.size.GM)[i],x,sep=""),sep = ",",row.names=F)
-    
-    a=Out.size.BW[[i]]
-    a=as.data.frame.matrix(a)
-    a$FINYEAR=rownames(a)
-    write.table(a,paste(getwd(),"/Dusky shark/Dusky shark_Size_composition_",names(Out.size.BW)[i],x,sep=""),sep = ",",row.names=F)
-    
-    a=Out.size.TK[[i]]
-    a=as.data.frame.matrix(a)
-    a$FINYEAR=rownames(a)
-    write.table(a,paste(getwd(),"/Sandbar shark/Sandbar shark_Size_composition_",names(Out.size.TK)[i],x,sep=""),sep = ",",row.names=F)
-  }
+  Store.X2=data.frame(Code=All.sp,X2.p=NA)
+  for(i in 1:length(All.sp))Store.X2[i,2]=Chi.squar(subset(DATA,SPECIES%in%All.sp[i]& SEX%in%c("M","F")))
+  Store.X2$X2.p=ifelse(!is.na(Store.X2$X2.p),round(Store.X2$X2.p,3),Store.X2$X2.p)
   
   
-}
-
-
-
-
-# #by zone and sex
-# for(i in 1:length(Out.size.WH)) 
-# {
-#   a=Out.size.WH.f[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Whiskery.female.",names(Out.size.WH)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   a=Out.size.WH.m[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Whiskery.male.",names(Out.size.WH)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   
-#   a=Out.size.GM.f[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Gummy.female",names(Out.size.GM)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   a=Out.size.GM.m[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Gummy.male",names(Out.size.GM)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   
-#   a=Out.size.BW.f[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Dusky.female",names(Out.size.BW)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   a=Out.size.BW.m[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Dusky.male",names(Out.size.BW)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   
-#   a=Out.size.TK.f[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Sandbar.female",names(Out.size.TK)[i],x,sep=""),sep = ",",row.names=F)
-#   
-#   a=Out.size.TK.m[[i]]
-#   a=as.data.frame.matrix(a)
-#   a$FINYEAR=rownames(a)
-#   write.table(a,paste("Sandbar.male",names(Out.size.TK)[i],x,sep=""),sep = ",",row.names=F)
-#   
-# }
-
-#Fix nonsense species
-DATA$SPECIES=with(DATA,ifelse(SPECIES=="CP" & LAT>(-25),"BW",SPECIES))
-
-#Fix nonsense FL
-DATA$FL=with(DATA,ifelse(SPECIES=="BW" & FL>400,NA,
-             ifelse(SPECIES=="TK" & FL>350,NA,
-             ifelse(SPECIES=="GM" & FL>200,NA,
-             ifelse(SPECIES=="WH" & FL>200,NA,
-             ifelse(SPECIES=="HZ" & FL>350,NA,
-             ifelse(SPECIES=="LG" & FL>350,NA,
-             ifelse(SPECIES=="MI" & FL>200,NA,
-             ifelse(SPECIES=="SO" & FL>250,NA,
-             ifelse(SPECIES=="TG" & FL>700,NA,
-             ifelse(SPECIES=="BT" & FL>300,NA,
-             ifelse(SPECIES=="PN" & FL>180,NA,
-             ifelse(SPECIES=="HS" & FL>350,NA,
-             ifelse(SPECIES=="CP" & FL>350,NA,
-             ifelse(SPECIES=="GN" & FL>350,NA,
-             FL)))))))))))))))
-
-
-setwd("C:/Matias/Analyses/Size and sex patterns")
-
-#Species diversity
-fn.map=function()
-{
-  plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
-          plt = NULL,col="grey80",tck = 0.025, tckMinor = 0.0125,
-          xlab="",ylab="",axes=F)
-  lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="grey50")
-  axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
-  axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.08)
-  axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
-  axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.08)
-  box()
-}
-
-AxisY=function() axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.25,las=2,tck=-0.08)
-AxisX=function() axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.25,tck=-0.08)
-
-fn.diversity=function(dat,LEG)
-{
-  dat=subset(dat,!BLOCK==0)
-  a=dat[,match(c("BLOCK","LAT","LONG"),names(dat))]
-  a=a[!duplicated(a$BLOCK),]
+  This.sp=names(Table.species)
   
-  #Species richness (Number of species)
-  Table.Blok.Sp=table(dat$SPECIES,dat$BLOCK)
+  
+  #Range analysis
+  DATA=subset(DATA,!(SPECIES=="GM" & Mid.Lat>(-26)))
+  DATA=subset(DATA,!BLOCK%in%c(2415,2315,2519))  #remove land blocks
+  
+  Lat.range=c(-36,-10)
+  Long.range=c(112,129)
+  fn.plot.sp=function(dat)plot(dat$LONG,dat$LAT,xlim=Long.range,ylim=Lat.range,main=This.sp[i])
+  for(i in 1:length(This.sp))fn.plot.sp(subset(DATA,SPECIES==This.sp[i]))
+  
+  Table.Blok.Sp=table(DATA$SPECIES,DATA$BLOCK)
   Table.Blok.Sp=ifelse(Table.Blok.Sp>0,1,0)
-  Table.Blok.Sp=data.frame(BLOCK=colnames(Table.Blok.Sp),N.species=colSums(Table.Blok.Sp))
-  Table.Blok.Sp=merge(Table.Blok.Sp,a,by="BLOCK",all.x=T)
-  MAX=max(Table.Blok.Sp$N.species)
-  fn.map()
-  points(Table.Blok.Sp$LONG+0.5,Table.Blok.Sp$LAT-0.5,pch=19,col="black",
-       cex=(Table.Blok.Sp$N.species/MAX)*2)
-  mtext(LEG,3)
-  if(LEG=="Gillnet")
+  Table.Blok.Sp=data.frame(SPECIES=rownames(Table.Blok.Sp),N.blok=rowSums(Table.Blok.Sp))
+  Table.Blok.Sp=subset(Table.Blok.Sp,SPECIES%in%names(Table.species[Table.species>=100]))
+  Table.Blok.Sp=merge(Table.Blok.Sp,SPECIES.names,by.x="SPECIES",by.y="Species",all.x=T)
+  
+  
+  
+  
+  #Keep only gillnets of 6 to 7 inch mesh and LL
+  Meshes=c("6","6.5","7")
+  DATA=subset(DATA,Method%in%c("GN","LL"))
+  DATA$Keep=with(DATA,ifelse(Method=="LL","YES",ifelse(MESH_SIZE %in%Meshes,"YES","NO")))
+  DATA=subset(DATA,Keep=="YES")
+  
+  Table.mesh=table(DATA$MESH_SIZE)
+  Table.mesh=round(Table.mesh/sum(Table.mesh),2)
+  
+  YRS=sort(unique(DATA$year))
+  n.yrs=length(YRS)
+  
+  
+  
+  
+  #2. Output commercial species FL data for 6.5 and 7 inch gillnet for population dynamics
+  #2.1 Separate data by zone
+  fn.byzone=function(a,coef.1,coef.2)
   {
-    legend("topleft","Richness",bty='n',cex=1.5)
-    legend("right",c("1","10","20"),pch=19,col=1,pt.cex=c(1/MAX,10/MAX,20/MAX)*2,bty='n',cex=1.3)
-    AxisY()
+    a$ZONE=as.character(a$zone)
+    a$ZONE=with(a,ifelse(ZONE=="2","Zone2",ifelse(ZONE=="1","Zone1",ZONE)))
+    a$ZONE=with(a,ifelse(is.na(ZONE) & LONG>=116.5 & LAT<=(-26),"Zone2",
+                         ifelse(is.na(ZONE) & LONG<116.5 & LAT<=(-33),"Zone1",
+                                ifelse(is.na(ZONE) & LAT>(-33) & LAT<=(-26) & LONG<116.5,"WC",
+                                       ifelse(is.na(ZONE) & LAT>(-26) & LONG<114,"Closed",
+                                              ifelse(is.na(ZONE) & LAT>(-26) & LONG>=114 & LONG<123.75,"North",
+                                                     ifelse(is.na(ZONE) & LAT>(-26) & LONG>=123.75,"Joint",ZONE)))))))
+    a=subset(a,!ZONE=="North")
+    
+    a$FL=with(a,ifelse(is.na(FL) & !is.na(TL),(TL-coef.1)/coef.2,FL))
+    zones=unique(a$ZONE)
+    Zones.size=vector('list',length(zones))
+    names(Zones.size)=zones
+    for(z in 1:length(Zones.size)) Zones.size[[z]]=subset(a,ZONE==zones[z])
+    return(Zones.size)  
   }
-
-
-  #Species evenness
-  Table.Blok.Sp=table(dat$BLOCK,dat$SPECIES)
-  H=diversity(Table.Blok.Sp)  #Shannon-Weaver
-  J=H/log(specnumber(Table.Blok.Sp))  #Pielou's evenness
-  Table.eve=data.frame(BLOCK=names(J),Evenness=J)
-  Table.eve=merge(Table.eve,a,by="BLOCK",all.x=T)
-  fn.map()
-  points(Table.eve$LONG+0.5,Table.eve$LAT-0.5,pch=19,col="black",
-         cex=Table.eve$Evenness*2)
-  if(LEG=="Gillnet")
+  #note: coef.1 and .2 derived in De Wysiecki and Braccini 2017
+  WH.size=fn.byzone(subset(DATA,SPECIES=="WH" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
+                    coef.1=6.267,coef.2=1.063)
+  GM.size=fn.byzone(subset(DATA,SPECIES=="GM" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
+                    coef.1=2.007,coef.2=1.019)
+  BW.size=fn.byzone(subset(DATA,SPECIES=="BW" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
+                    coef.1=1.486,coef.2=1.202)
+  TK.size=fn.byzone(subset(DATA,SPECIES=="TK" & Method=="GN" & MESH_SIZE%in%c("6.5","7")),
+                    coef.1=5.87,coef.2=1.129)
+  
+  
+  #Export sex ratio of commercial species for population dynamcis
+  Sex.list=list(WH.size,GM.size,BW.size,TK.size)
+  names(Sex.list)=c("WH","GM","BW","TK")
+  Zne.sx.Ratio=list(WH=NA,GM=NA,BW=NA,TK=NA)
+  fn.Zne.sx.Ratio=function(dat)
   {
-    legend("topleft","Evenness",bty='n',cex=1.5)
-    legend("right",c("0.25","0.5","1"),pch=19,col=1,pt.cex=c(0.25,0.5,1)*2,bty='n',cex=1.3)
-    AxisY()
+    names(dat)[match(c("Zone2","West","Zone1"),names(dat))] =c("Zn2","WC","Zn1")
+    n=length(dat)
+    Stor=vector('list',n)
+    names(Stor)=names(dat)
+    for(i in 1:n)
+    {
+      aa=subset(dat[[i]],SEX%in%c("M","F"))
+      Stor[[i]]=table(aa$SEX)
+    }
+    return(Stor)
   }
-
-  if(LEG=="Longline")
+  
+  #Export proportion of males in catch data for population dynamics modelling
+  hndl="C:/Matias/Data/Population dynamics/Prop.males.in.catch/"
+  if (Export.dat=="YES")
   {
-    legend(116,-22,"Western",bty='n',cex=1.3)
-    legend(116,-24,"Australia",bty='n',cex=1.3)
+    for(q in 1:length(Zne.sx.Ratio))
+    {
+      Zne.sx.Ratio[[q]]= fn.Zne.sx.Ratio(Sex.list[[q]])
+      tab=do.call(rbind,Zne.sx.Ratio[[q]])
+      
+      tab.all=sum(tab[,2])/(sum(tab[,1])+sum(tab[,2]))
+      tab1=tab[,2]/(tab[,1]+tab[,2])
+      id=match(c("Zn1","Zn2","WC"),names(tab1))
+      tab1=matrix(tab1[id],ncol=3)
+      colnames(tab1)=c("Zn1","Zn2","WC")
+      write.csv(tab1,paste(hndl,"prop.males.",names(Zne.sx.Ratio)[q],".csv",sep=""),row.names=F)
+      write.csv(tab.all,paste(hndl,"prop.males.All.",names(Zne.sx.Ratio)[q],".csv",sep=""),row.names=F)
+    }
   }
+  
+  fn.Zne.sx.Ratio.yr=function(dat,NM)
+  {
+    n=length(dat)
+    for(i in 1:n)
+    {
+      aa=subset(dat[[i]],SEX%in%c("M","F"))
+      dd=aggregate(Number~SEX+year,aa,sum)
+      wide <- reshape(dd, v.names = "Number", idvar = "SEX",
+                      timevar = "year", direction = "wide")
+      p.male=unlist(wide[2,2:ncol(wide)]/colSums(wide[,2:ncol(wide)]))
+      Yr=as.numeric(substr(names(p.male),8,18))
+      Mod=lm(p.male~Yr)
+      plot(Yr,p.male,pch=19,col=2,main=paste(NM,names(dat)[i]))
+      legend("topright",paste("slope signif=",round(anova(Mod)$"Pr(>F)"[1],4)),bty='n')
+      
+    }
+    
+  }
+  for(q in 1:length(Zne.sx.Ratio))fn.Zne.sx.Ratio.yr(Sex.list[[q]],names(Sex.list)[q])
+  
+  rm(Sex.list) 
+  
+  
+  
+  
+  #2.2 create composition bins
+  
+  fn.size.comp=function(dat,Min,Max,interval)
+  {
+    dat=dat[order(dat$year),]
+    
+    dat$FINYEAR=with(dat,ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
+                                paste(year-1,"-",fn.subs(year),sep="")))
+    
+    Rango=c(Min,Max)
+    SEQ=seq(Rango[1],Rango[2],interval)
+    dat$FL.bin=floor(dat$FL/interval)*interval
+    dat$FINYEAR=factor(dat$FINYEAR)
+    
+    #dat1=subset(dat,Mid.Lat<(-26) & Method=="GN" & MESH_SIZE=="7")
+    #dat2=subset(dat,Mid.Lat<(-26) & Method=="GN" & MESH_SIZE=="6.5")  
+    
+    #Table.7.inch=with(dat1,table(FINYEAR,FL.bin))
+    #Table.6.5.inch=with(dat2,table(FINYEAR,FL.bin))
+    Table.6.5.and.7.inch=with(dat,table(FINYEAR,FL.bin))
+    
+    return(Table.6.5.and.7.inch)
+    #   return(list(Table.7.inch=Table.7.inch,Table.6.5.inch=Table.6.5.inch,
+    #               Table.6.5.and.7.inch=Table.6.5.and.7.inch))
+  }
+  
+  Out.size.WH=WH.size
+  Out.size.GM=GM.size
+  Out.size.BW=BW.size
+  Out.size.TK=TK.size
+  
+  Comm.sp=c("BW","TK","GM","WH")
+  Min.FL=c(56,42,23,15)  #FL at birth
+  Max.FL= c(310,200,170,150)  #max FL   
+  
+  #By zone
+  for(i in 1:length(Out.size.WH)) Out.size.WH[[i]]=fn.size.comp(subset(Out.size.WH[[i]],
+                                                                       FL<=Max.FL[4]& FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
+  
+  for(i in 1:length(Out.size.GM)) Out.size.GM[[i]]=fn.size.comp(subset(Out.size.GM[[i]],
+                                                                       FL<=Max.FL[3] & FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
+  
+  for(i in 1:length(Out.size.BW)) Out.size.BW[[i]]=fn.size.comp(subset(Out.size.BW[[i]],
+                                                                       FL<=Max.FL[1] & FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)
+  
+  for(i in 1:length(Out.size.TK)) Out.size.TK[[i]]=fn.size.comp(subset(Out.size.TK[[i]],
+                                                                       FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
+  
+  # #By zone and sex
+  # Out.size.WH.m=Out.size.WH.f=WH.size
+  # Out.size.GM.m=Out.size.GM.f=GM.size
+  # Out.size.BW.m=Out.size.BW.f=BW.size
+  # Out.size.TK.m=Out.size.TK.f=TK.size
+  # 
+  # for(i in 1:length(Out.size.WH)) 
+  # {
+  #   Out.size.WH.m[[i]]=fn.size.comp(subset(Out.size.WH[[i]],SEX=='M' & FL<=Max.FL[4] & FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
+  #   Out.size.WH.f[[i]]=fn.size.comp(subset(Out.size.WH[[i]],SEX=='F' & FL<=Max.FL[4] & FL>Min.FL[4]),Min.FL[4],Max.FL[4],2)
+  # }
+  # 
+  # 
+  # for(i in 1:length(Out.size.GM))
+  # {
+  #   Out.size.GM.m[[i]]=fn.size.comp(subset(Out.size.GM[[i]],SEX=='M' & FL<=Max.FL[3]& FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
+  #   Out.size.GM.f[[i]]=fn.size.comp(subset(Out.size.GM[[i]],SEX=='F' & FL<=Max.FL[3]& FL>Min.FL[3]),Min.FL[3],Max.FL[3],2)
+  # }
+  # 
+  # for(i in 1:length(Out.size.BW))
+  # {
+  #   Out.size.BW.m[[i]]=fn.size.comp(subset(Out.size.BW[[i]],SEX=='M' & FL<=Max.FL[1]& FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)  
+  #   Out.size.BW.f[[i]]=fn.size.comp(subset(Out.size.BW[[i]],SEX=='F' & FL<=Max.FL[1]& FL>Min.FL[1]),Min.FL[1],Max.FL[1],2)  
+  # }
+  # 
+  # 
+  # for(i in 1:length(Out.size.TK))
+  # {
+  #   Out.size.TK.m[[i]]=fn.size.comp(subset(Out.size.TK[[i]],SEX=='M' & FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
+  #   Out.size.TK.f[[i]]=fn.size.comp(subset(Out.size.TK[[i]],SEX=='F' & FL<=Max.FL[2] & FL>Min.FL[2]),Min.FL[2],Max.FL[2],2)
+  # }
+  
+  #Fix nonsense species
+  DATA$SPECIES=with(DATA,ifelse(SPECIES=="CP" & LAT>(-25),"BW",SPECIES))
+  
+  
+  
+  
+  setwd("C:/Matias/Analyses/Size and sex patterns")
   
   #Species diversity
-  Table.div=data.frame(BLOCK=names(H),Diversity=H)
-  Table.div=merge(Table.div,a,by="BLOCK",all.x=T)
-  fn.map()
-  points(Table.div$LONG+0.5,Table.div$LAT-0.5,pch=19,col="black",
-         cex=Table.div$Diversity)
-  if(LEG=="Gillnet")
+  fn.map=function()
   {
-    legend("topleft","Diversity",bty='n',cex=1.5)
-    legend("right",c("0.5","1","2"),pch=19,col=1,pt.cex=c(0.5,1,2),bty='n',cex=1.3)
-    AxisY()
+    plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
+            plt = NULL,col="grey80",tck = 0.025, tckMinor = 0.0125,
+            xlab="",ylab="",axes=F)
+    lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="grey50")
+    axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
+    axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.08)
+    axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
+    axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.08)
+    box()
   }
-  AxisX()
-}
-
-
-XAXIS=c(110,130)
-YAXIS=c(-37,-13)
-
-tiff("Figure Richness.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(3,2),mai=c(0.1,.1,0.15,.01),oma=c(3,3,0.15,0.01))
-fn.diversity(subset(DATA,Method=="GN"),"Gillnet")
-
-fn.diversity(subset(DATA,Method=="LL"),"Longline")
-mtext("Longitude (?E)",side=1,line=1.6,font=1,las=0,cex=1.4,outer=T)
-mtext("Latitude (?S)",side=2,line=1,font=1,las=0,cex=1.4,outer=T)
-dev.off()
-
-
-#Percent deviance explained
-  #Overall
-Dsquared <- function(model, adjust = F)
-{
-  if(!is.null(model$deviance))
+  
+  AxisY=function() axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.25,las=2,tck=-0.08)
+  AxisX=function() axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.25,tck=-0.08)
+  
+  fn.diversity=function(dat,LEG)
   {
-    d2 <- (model$null.deviance - model$deviance) / model$null.deviance
-    if (adjust)
+    dat=subset(dat,!BLOCK==0)
+    a=dat[,match(c("BLOCK","LAT","LONG"),names(dat))]
+    a=a[!duplicated(a$BLOCK),]
+    
+    #Species richness (Number of species)
+    Table.Blok.Sp=table(dat$SPECIES,dat$BLOCK)
+    Table.Blok.Sp=ifelse(Table.Blok.Sp>0,1,0)
+    Table.Blok.Sp=data.frame(BLOCK=colnames(Table.Blok.Sp),N.species=colSums(Table.Blok.Sp))
+    Table.Blok.Sp=merge(Table.Blok.Sp,a,by="BLOCK",all.x=T)
+    MAX=max(Table.Blok.Sp$N.species)
+    fn.map()
+    points(Table.Blok.Sp$LONG+0.5,Table.Blok.Sp$LAT-0.5,pch=19,col="black",
+           cex=(Table.Blok.Sp$N.species/MAX)*2)
+    mtext(LEG,3)
+    if(LEG=="Gillnet")
     {
-      n <- length(model$fitted.values)
-      p <- length(model$coefficients)
-      d2 <- 1 - ((n - 1) / (n - p)) * (1 - d2)
+      legend("topleft","Richness",bty='n',cex=1.5)
+      legend("right",c("1","10","20"),pch=19,col=1,pt.cex=c(1/MAX,10/MAX,20/MAX)*2,bty='n',cex=1.3)
+      AxisY()
     }
-    d3=d2*100
-    d1=model$deviance
-    d2=model$null.deviance
+    
+    
+    #Species evenness
+    Table.Blok.Sp=table(dat$BLOCK,dat$SPECIES)
+    H=diversity(Table.Blok.Sp)  #Shannon-Weaver
+    J=H/log(specnumber(Table.Blok.Sp))  #Pielou's evenness
+    Table.eve=data.frame(BLOCK=names(J),Evenness=J)
+    Table.eve=merge(Table.eve,a,by="BLOCK",all.x=T)
+    fn.map()
+    points(Table.eve$LONG+0.5,Table.eve$LAT-0.5,pch=19,col="black",
+           cex=Table.eve$Evenness*2)
+    if(LEG=="Gillnet")
+    {
+      legend("topleft","Evenness",bty='n',cex=1.5)
+      legend("right",c("0.25","0.5","1"),pch=19,col=1,pt.cex=c(0.25,0.5,1)*2,bty='n',cex=1.3)
+      AxisY()
+    }
+    
+    if(LEG=="Longline")
+    {
+      legend(116,-22,"Western",bty='n',cex=1.3)
+      legend(116,-24,"Australia",bty='n',cex=1.3)
+    }
+    
+    #Species diversity
+    Table.div=data.frame(BLOCK=names(H),Diversity=H)
+    Table.div=merge(Table.div,a,by="BLOCK",all.x=T)
+    fn.map()
+    points(Table.div$LONG+0.5,Table.div$LAT-0.5,pch=19,col="black",
+           cex=Table.div$Diversity)
+    if(LEG=="Gillnet")
+    {
+      legend("topleft","Diversity",bty='n',cex=1.5)
+      legend("right",c("0.5","1","2"),pch=19,col=1,pt.cex=c(0.5,1,2),bty='n',cex=1.3)
+      AxisY()
+    }
+    AxisX()
   }
   
-  if(is.null(model$deviance))
+  
+  XAXIS=c(110,130)
+  YAXIS=c(-37,-13)
+  
+  tiff("Figure Richness.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(3,2),mai=c(0.1,.1,0.15,.01),oma=c(3,3,0.15,0.01))
+  fn.diversity(subset(DATA,Method=="GN"),"Gillnet")
+  
+  fn.diversity(subset(DATA,Method=="LL"),"Longline")
+  mtext("Longitude (?E)",side=1,line=1.6,font=1,las=0,cex=1.4,outer=T)
+  mtext("Latitude (?S)",side=2,line=1,font=1,las=0,cex=1.4,outer=T)
+  dev.off()
+  
+  
+  #Percent deviance explained
+  #Overall
+  Dsquared <- function(model, adjust = F)
   {
-    d1=NA
-    d2=NA
-    d3=NA
+    if(!is.null(model$deviance))
+    {
+      d2 <- (model$null.deviance - model$deviance) / model$null.deviance
+      if (adjust)
+      {
+        n <- length(model$fitted.values)
+        p <- length(model$coefficients)
+        d2 <- 1 - ((n - 1) / (n - p)) * (1 - d2)
+      }
+      d3=d2*100
+      d1=model$deviance
+      d2=model$null.deviance
+    }
+    
+    if(is.null(model$deviance))
+    {
+      d1=NA
+      d2=NA
+      d3=NA
+    }
+    return(list(d1=d1,d2=d2,d3=d3))
   }
-  return(list(d1=d1,d2=d2,d3=d3))
-}
-
+  
   #Each term
-fn.dev.exp.term=function(dat)
-{
-  100*(dat$Anova$Deviance[2:length(dat$Anova$Deviance)]/dat$model$null.deviance)
-}
-
-
-#Model fit diagnostics
-fn.plot.diag=function(MODEL,SPECIES)
-{
-  RES=MODEL$residuals   #residuals
-  Std.RES=RES/sd(RES)   #standardised residuals (res/SD(res))
-  PREDS=predict(MODEL)
-  
-  par(mfcol=c(2,2),las=1,mar=c(3,3,2,1),oma=c(2.5,.1,.1,.1),las=1,mgp=c(2,.5,0),cex.axis=.8,cex.lab=1.1)
-  qqnorm(RES,main="",ylim=c(-5,5),xlim=c(-5,5),ylab="Residuals",xlab="Quantiles of standard normal distribution")
-  qqline(RES, col = 'grey40',lwd=1.5,lty=2)
-  
-  hist(Std.RES,xlim=c(-5,5),ylab="Frequency",xlab="Stan. residuals",main="",col="grey",breaks=50)
-  box()
-  
-  plot(PREDS,Std.RES,ylim=c(-4,12),ylab="Stan. residuals",xlab="Expected values")
-  abline(0,0,lwd=1.5,lty=2,col='grey40')
-  
-  plot(PREDS,sqrt(abs(Std.RES)),ylim=c(0,2.6),ylab="Square root of stan. residuals",xlab="Expected values")
-  mtext(paste(SPECIES),3,outer=T,lin=-1)
-}
-
-
-
-#Get blocks
-Blk.pos=subset(DATA,select=c("BLOCK","LAT","LONG"))
-Blk.pos=Blk.pos[!duplicated(Blk.pos$BLOCK),]
-Blk.pos=subset(Blk.pos,!(is.na(BLOCK) | BLOCK==0))
-
-
-
-#Exploratory analyses
-cfac=function(x,breaks=NULL)
-{
-  x=round(x,2)  
-  if(is.null(breaks)) breaks=unique(quantile(x,na.rm=T))
-  x=cut(x,breaks,include.lowest=T,right=F)
-  levels(x)=paste(breaks[-length(breaks)],ifelse(diff(breaks)>1,
-                                                 c(paste('-',breaks[-c(1,length(breaks))]-1,sep=''),'+'),''),sep='')
-  return(x)
-}
-fn.explore=function(dat)
-{
-  dat=subset(dat,!is.na(Mid.Long)  & Mid.Long>0)
-  dat=subset(dat,!is.na(Mid.Lat) & Mid.Lat<0)
-  dat$Sex.bin=with(dat,ifelse(SEX=="M",1,0))
-  dat$Soi=cfac(dat$SOI)
-  dat$FREO=cfac(dat$Freo)
-  dat$Lat=cfac(dat$Mid.Lat)
-  dat$Lon=cfac(dat$Mid.Long)
-  
-  # Main Effect of factors
-  par(mfcol=c(1,1),mai=c(.3,1,1,.1),oma=c(1,.1,.1,.1),las=1)
-  plot.design(Sex.bin~as.factor(BLOCK)+as.factor(year)+as.factor(Month)+Soi+FREO+Lat+Lon,data=dat,
-              cex.lab=1.5,cex.axis=.75,main=paste("Sex ratio",unique(dat$COMMON_NAME)))
-  
-  par(mfcol=c(4,2),mai=c(.7,.7,.1,.1),oma=c(2,2,.1,.1),las=1)
-  plot(Sex.bin~as.factor(Month),data=dat,ylab="",xlab="Month") 
-  plot(Sex.bin~as.factor(year),data=dat,ylab="",xlab="year")
-  plot(Sex.bin~as.factor(BLOCK),data=dat,ylab="",xlab="block")
-  plot(Sex.bin~Soi,data=dat,ylab="",xlab="SOI")
-  plot(Sex.bin~FREO,data=dat,ylab="",xlab="Freo")
-  plot(Sex.bin~Lat,data=dat,ylab="",xlab="Lat")
-  plot(Sex.bin~Lon,data=dat,ylab="",xlab="Long")
-  mtext(paste("Sex ratio",unique(dat$COMMON_NAME)),2,0,outer=T,las=3,cex=1.5)
-  
-  #Interactions
-  par(mfcol=c(1,1))
-  interaction.plot(as.factor(dat$year),as.factor(dat$BLOCK),dat$Sex.bin,ylab="response",xlab="block")
-  
-  
-  
-  #Block
-  agg.Male=aggregate(Number~BLOCK,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~BLOCK,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
-  agg.sex.block=agg.sex
-  
-  #Year
-  agg.Male=aggregate(Number~year,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~year,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("year"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
-  agg.sex.year=agg.sex
-  
-  #Month
-  agg.Male=aggregate(Number~Month,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~Month,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("Month"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
-  agg.sex.Month=agg.sex
-  
-  #Block and Year 
-  agg.Male=aggregate(Number~BLOCK+year,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[3]="N.male"
-  agg.Fem=aggregate(Number~BLOCK+year,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[3]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK","year"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
-  agg.sex.Blk.yr=agg.sex
-  
-  #Block, Year and Month
-  agg.Male=aggregate(Number~BLOCK+year+Month,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[4]="N.male"
-
-  agg.Fem=aggregate(Number~BLOCK+year+Month,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[4]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK","year","Month"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
-  agg.sex.Blk.yr.mn=agg.sex
-  
-  return(list(BLK=agg.sex.block,YR=agg.sex.year,MN=agg.sex.Month,
-              BLK.Yr=agg.sex.Blk.yr,Blk.Yr.Mn=agg.sex.Blk.yr.mn))
-}
-
-depth=function(dat)
-{
-  a=aggregate(Number~BOTDEPTH,subset(dat,SEX=="M"),sum)
-  b=aggregate(Number~BOTDEPTH,subset(dat,SEX=="F"),sum)
-  agg.sex=merge(a,b,by=c("BOTDEPTH"),all.x=T,all.y=T)
-  plot(agg.sex$BOTDEPTH,agg.sex$Number.x/agg.sex$Number.y,xlim=c(0,150),ylab="male:female",xlab="depth (m)",
-       main=unique(dat$SPECIES))
-}
-
-for(i in 1:length(Commercial.Sks))depth(subset(DATA,SPECIES%in%Commercial.Sks[i]& SEX%in%c("M","F")))
-
-
-#Colinearity
-fn.colinearity=function(dat)
-{
-  
-  dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
-  dat$LONG=as.factor(dat$LONG)
-  dat$LAT=as.factor(dat$LAT)
-  
-  Covars=dat[,match(c("BOTDEPTH.bin","LAT","LONG"),names(dat))]
-  #Covars=dat[,match(c("year","Month","BOTDEPTH","Moon","SOI","Freo","Mid.Lat","Mid.Long","Temperature"),names(dat))]
-  Covars=na.omit(Covars)
-  
-  panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...)
+  fn.dev.exp.term=function(dat)
   {
-    usr <- par("usr"); on.exit(par(usr))
-    par(usr = c(0, 1, 0, 1))
-    r <- abs(cor(x, y))
-    txt <- format(c(r, 0.123456789), digits=digits)[1]
-    txt <- paste(prefix, txt, sep="")
-    if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
-    text(0.5, 0.5, txt, cex = cex.cor * r)
+    100*(dat$Anova$Deviance[2:length(dat$Anova$Deviance)]/dat$model$null.deviance)
   }
-  pairs(Covars, lower.panel=panel.smooth, upper.panel=panel.cor,main=This.sp[i])
-
-}
-
-
-
-#Explore raw data for patterns in sandbar FL and Whiskery sex ratio
-fn.plot.all.FL=function(a,YLIM,XLIM,N.min)
-{
-  a$Number=1
-  This=aggregate(FL~Mid.Lat+Mid.Long,a,mean,na.rm=T)
-  Number=aggregate(Number~Mid.Lat+Mid.Long,a,sum,na.rm=T)
-  This=merge(This,Number,by=c("Mid.Lat","Mid.Long"),all.x=T)
-  This=subset(This,Number>N.min)
-  This$Prop=This$FL/max(This$FL)
   
-  par(mfcol=c(2,1),mai=c(0.7,1,.25,.1),mgp=c(1,.5,0))
-  plot(This$Mid.Long,This$Mid.Lat,pch=19,cex=(This$Prop),ylim=YLIM,xlim=XLIM,col=4,
-       main=paste("Mean FL (as % of max mean FL) for",unique(a$SPECIES)),xlab="Longitude",ylab="Latitude")
-  legend("topright",c("10%","50%","100%"),bty="n",col=4,pch=c(19,19,19),pt.cex=c(0.1,0.5,1),cex=1.1)
   
-  b=aggregate(FL~BOTDEPTH,a,mean,na.rm=T)
-  plot(b$BOTDEPTH,b$FL,xlab="Depth",ylab="FL",main=paste("All records,",unique(a$SPECIES)),xlim=c(0,250))
-}
-
-fn.plot.all.FL(subset(DATA,SPECIES=="TK"),c(-36,-14),c(113,120),N.min=6)
-fn.plot.all.FL(subset(DATA,SPECIES=="BW"),c(-36,-14),c(113,128),N.min=6)
-fn.plot.all.FL(subset(DATA,SPECIES=="GM"),c(-36,-14),c(113,128),N.min=6)
-
-
-#Sex ratio by shot for shots with more than n observations
-fn.plot.all.sex=function(a,YLIM,XLIM,N.min)
-{
-  a$Number=1
-  mal=aggregate(Number~Mid.Lat+Mid.Long,subset(a,SEX=="M"),sum)
-  names(mal)[3]="N.male"
-  fem=aggregate(Number~Mid.Lat+Mid.Long,subset(a,SEX=="F"),sum)
-  names(fem)[3]="N.female"
-  both=merge(mal,fem,by=c("Mid.Lat","Mid.Long"),all.x=T,all.y=T)
-  both$N.male=with(both,ifelse(is.na(N.male),0,N.male))
-  both$N.female=with(both,ifelse(is.na(N.female),0,N.female))
-  both$Sum=both$N.male+both$N.female
-  both$Prop.male=both$N.male/both$Sum
-  both$Prop.male=ifelse(both$Prop.male==0,0.01,both$Prop.male)
-  both$Prop.female=both$N.female/both$Sum
-  both$Prop.female=ifelse(both$Prop.female==0,0.01,both$Prop.female)
-  both=subset(both,Sum>N.min)
+  #Model fit diagnostics
+  fn.plot.diag=function(MODEL,SPECIES)
+  {
+    RES=MODEL$residuals   #residuals
+    Std.RES=RES/sd(RES)   #standardised residuals (res/SD(res))
+    PREDS=predict(MODEL)
+    
+    par(mfcol=c(2,2),las=1,mar=c(3,3,2,1),oma=c(2.5,.1,.1,.1),las=1,mgp=c(2,.5,0),cex.axis=.8,cex.lab=1.1)
+    qqnorm(RES,main="",ylim=c(-5,5),xlim=c(-5,5),ylab="Residuals",xlab="Quantiles of standard normal distribution")
+    qqline(RES, col = 'grey40',lwd=1.5,lty=2)
+    
+    hist(Std.RES,xlim=c(-5,5),ylab="Frequency",xlab="Stan. residuals",main="",col="grey",breaks=50)
+    box()
+    
+    plot(PREDS,Std.RES,ylim=c(-4,12),ylab="Stan. residuals",xlab="Expected values")
+    abline(0,0,lwd=1.5,lty=2,col='grey40')
+    
+    plot(PREDS,sqrt(abs(Std.RES)),ylim=c(0,2.6),ylab="Square root of stan. residuals",xlab="Expected values")
+    mtext(paste(SPECIES),3,outer=T,lin=-1)
+  }
   
-  par(mfcol=c(2,1),mai=c(.7,1,.25,.1),mgp=c(1,.5,0))
-  plot(both$Mid.Long,both$Mid.Lat,pch=19,cex=(both$Prop.male),ylim=YLIM,xlim=XLIM,col=4,
-       main=paste("Percentage of males per shot for",unique(a$SPECIES)),xlab="",ylab="Latitude")
-  legend("topright",c("10%","50%","100%"),bty="n",col=4,pch=c(19,19,19),pt.cex=c(0.1,0.5,1),cex=1.1)
   
-  plot(both$Mid.Long,both$Mid.Lat,pch=19,cex=(both$Prop.female),ylim=YLIM,xlim=c(113,128),col="pink",
-       main=paste("Percentage of females per shot for",unique(a$SPECIES)),xlab="Longitude",ylab="Latitude")
   
-}
-
-
-fn.plot.all.sex(subset(DATA,SPECIES=="WH"),c(-36,-26),c(113,128),N.min=9)
-fn.plot.all.sex(subset(DATA,SPECIES=="GM"),c(-36,-26),c(113,128),N.min=9)
-fn.plot.all.sex(subset(DATA,SPECIES=="BW"),c(-36,-25),c(113,128),N.min=9)
-fn.plot.all.sex(subset(DATA,SPECIES=="TK"),c(-36,-17),c(113,120),N.min=9)
-
-
+  #Get blocks
+  Blk.pos=subset(DATA,select=c("BLOCK","LAT","LONG"))
+  Blk.pos=Blk.pos[!duplicated(Blk.pos$BLOCK),]
+  Blk.pos=subset(Blk.pos,!(is.na(BLOCK) | BLOCK==0))
   
-#Schooling behaviour by shot
-fn.school.sex=function(a,N.min)
+  
+  
+  #Exploratory analyses
+  cfac=function(x,breaks=NULL)
+  {
+    x=round(x,2)  
+    if(is.null(breaks)) breaks=unique(quantile(x,na.rm=T))
+    x=cut(x,breaks,include.lowest=T,right=F)
+    levels(x)=paste(breaks[-length(breaks)],ifelse(diff(breaks)>1,
+                                                   c(paste('-',breaks[-c(1,length(breaks))]-1,sep=''),'+'),''),sep='')
+    return(x)
+  }
+  fn.explore=function(dat)
+  {
+    dat=subset(dat,!is.na(Mid.Long)  & Mid.Long>0)
+    dat=subset(dat,!is.na(Mid.Lat) & Mid.Lat<0)
+    dat$Sex.bin=with(dat,ifelse(SEX=="M",1,0))
+    dat$Soi=cfac(dat$SOI)
+    dat$FREO=cfac(dat$Freo)
+    dat$Lat=cfac(dat$Mid.Lat)
+    dat$Lon=cfac(dat$Mid.Long)
+    
+    # Main Effect of factors
+    par(mfcol=c(1,1),mai=c(.3,1,1,.1),oma=c(1,.1,.1,.1),las=1)
+    plot.design(Sex.bin~as.factor(BLOCK)+as.factor(year)+as.factor(Month)+Soi+FREO+Lat+Lon,data=dat,
+                cex.lab=1.5,cex.axis=.75,main=paste("Sex ratio",unique(dat$COMMON_NAME)))
+    
+    par(mfcol=c(4,2),mai=c(.7,.7,.1,.1),oma=c(2,2,.1,.1),las=1)
+    plot(Sex.bin~as.factor(Month),data=dat,ylab="",xlab="Month") 
+    plot(Sex.bin~as.factor(year),data=dat,ylab="",xlab="year")
+    plot(Sex.bin~as.factor(BLOCK),data=dat,ylab="",xlab="block")
+    plot(Sex.bin~Soi,data=dat,ylab="",xlab="SOI")
+    plot(Sex.bin~FREO,data=dat,ylab="",xlab="Freo")
+    plot(Sex.bin~Lat,data=dat,ylab="",xlab="Lat")
+    plot(Sex.bin~Lon,data=dat,ylab="",xlab="Long")
+    mtext(paste("Sex ratio",unique(dat$COMMON_NAME)),2,0,outer=T,las=3,cex=1.5)
+    
+    #Interactions
+    par(mfcol=c(1,1))
+    interaction.plot(as.factor(dat$year),as.factor(dat$BLOCK),dat$Sex.bin,ylab="response",xlab="block")
+    
+    
+    
+    #Block
+    agg.Male=aggregate(Number~BLOCK,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[2]="N.male"
+    agg.Fem=aggregate(Number~BLOCK,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[2]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
+    agg.sex.block=agg.sex
+    
+    #Year
+    agg.Male=aggregate(Number~year,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[2]="N.male"
+    agg.Fem=aggregate(Number~year,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[2]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("year"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
+    agg.sex.year=agg.sex
+    
+    #Month
+    agg.Male=aggregate(Number~Month,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[2]="N.male"
+    agg.Fem=aggregate(Number~Month,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[2]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("Month"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
+    agg.sex.Month=agg.sex
+    
+    #Block and Year 
+    agg.Male=aggregate(Number~BLOCK+year,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[3]="N.male"
+    agg.Fem=aggregate(Number~BLOCK+year,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[3]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK","year"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
+    agg.sex.Blk.yr=agg.sex
+    
+    #Block, Year and Month
+    agg.Male=aggregate(Number~BLOCK+year+Month,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[4]="N.male"
+    
+    agg.Fem=aggregate(Number~BLOCK+year+Month,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[4]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK","year","Month"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$ratio=round(agg.sex$N.male/agg.sex$N.female,2)
+    agg.sex.Blk.yr.mn=agg.sex
+    
+    return(list(BLK=agg.sex.block,YR=agg.sex.year,MN=agg.sex.Month,
+                BLK.Yr=agg.sex.Blk.yr,Blk.Yr.Mn=agg.sex.Blk.yr.mn))
+  }
+  
+  depth=function(dat)
+  {
+    a=aggregate(Number~BOTDEPTH,subset(dat,SEX=="M"),sum)
+    b=aggregate(Number~BOTDEPTH,subset(dat,SEX=="F"),sum)
+    agg.sex=merge(a,b,by=c("BOTDEPTH"),all.x=T,all.y=T)
+    plot(agg.sex$BOTDEPTH,agg.sex$Number.x/agg.sex$Number.y,xlim=c(0,150),ylab="male:female",xlab="depth (m)",
+         main=unique(dat$SPECIES))
+  }
+  
+  for(i in 1:length(Commercial.Sks))depth(subset(DATA,SPECIES%in%Commercial.Sks[i]& SEX%in%c("M","F")))
+  
+  
+  #Colinearity
+  fn.colinearity=function(dat)
+  {
+    
+    dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
+    dat$LONG=as.factor(dat$LONG)
+    dat$LAT=as.factor(dat$LAT)
+    
+    Covars=dat[,match(c("BOTDEPTH.bin","LAT","LONG"),names(dat))]
+    #Covars=dat[,match(c("year","Month","BOTDEPTH","Moon","SOI","Freo","Mid.Lat","Mid.Long","Temperature"),names(dat))]
+    Covars=na.omit(Covars)
+    
+    panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...)
+    {
+      usr <- par("usr"); on.exit(par(usr))
+      par(usr = c(0, 1, 0, 1))
+      r <- abs(cor(x, y))
+      txt <- format(c(r, 0.123456789), digits=digits)[1]
+      txt <- paste(prefix, txt, sep="")
+      if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+      text(0.5, 0.5, txt, cex = cex.cor * r)
+    }
+    pairs(Covars, lower.panel=panel.smooth, upper.panel=panel.cor,main=This.sp[i])
+    
+  }
+  
+  
+  
+  #Explore raw data for patterns in sandbar FL and Whiskery sex ratio
+  fn.plot.all.FL=function(a,YLIM,XLIM,N.min)
+  {
+    a$Number=1
+    This=aggregate(FL~Mid.Lat+Mid.Long,a,mean,na.rm=T)
+    Number=aggregate(Number~Mid.Lat+Mid.Long,a,sum,na.rm=T)
+    This=merge(This,Number,by=c("Mid.Lat","Mid.Long"),all.x=T)
+    This=subset(This,Number>N.min)
+    This$Prop=This$FL/max(This$FL)
+    
+    par(mfcol=c(2,1),mai=c(0.7,1,.25,.1),mgp=c(1,.5,0))
+    plot(This$Mid.Long,This$Mid.Lat,pch=19,cex=(This$Prop),ylim=YLIM,xlim=XLIM,col=4,
+         main=paste("Mean FL (as % of max mean FL) for",unique(a$SPECIES)),xlab="Longitude",ylab="Latitude")
+    legend("topright",c("10%","50%","100%"),bty="n",col=4,pch=c(19,19,19),pt.cex=c(0.1,0.5,1),cex=1.1)
+    
+    b=aggregate(FL~BOTDEPTH,a,mean,na.rm=T)
+    plot(b$BOTDEPTH,b$FL,xlab="Depth",ylab="FL",main=paste("All records,",unique(a$SPECIES)),xlim=c(0,250))
+  }
+  
+  fn.plot.all.FL(subset(DATA,SPECIES=="TK"),c(-36,-14),c(113,120),N.min=6)
+  fn.plot.all.FL(subset(DATA,SPECIES=="BW"),c(-36,-14),c(113,128),N.min=6)
+  fn.plot.all.FL(subset(DATA,SPECIES=="GM"),c(-36,-14),c(113,128),N.min=6)
+  
+  
+  #Sex ratio by shot for shots with more than n observations
+  fn.plot.all.sex=function(a,YLIM,XLIM,N.min)
+  {
+    a$Number=1
+    mal=aggregate(Number~Mid.Lat+Mid.Long,subset(a,SEX=="M"),sum)
+    names(mal)[3]="N.male"
+    fem=aggregate(Number~Mid.Lat+Mid.Long,subset(a,SEX=="F"),sum)
+    names(fem)[3]="N.female"
+    both=merge(mal,fem,by=c("Mid.Lat","Mid.Long"),all.x=T,all.y=T)
+    both$N.male=with(both,ifelse(is.na(N.male),0,N.male))
+    both$N.female=with(both,ifelse(is.na(N.female),0,N.female))
+    both$Sum=both$N.male+both$N.female
+    both$Prop.male=both$N.male/both$Sum
+    both$Prop.male=ifelse(both$Prop.male==0,0.01,both$Prop.male)
+    both$Prop.female=both$N.female/both$Sum
+    both$Prop.female=ifelse(both$Prop.female==0,0.01,both$Prop.female)
+    both=subset(both,Sum>N.min)
+    
+    par(mfcol=c(2,1),mai=c(.7,1,.25,.1),mgp=c(1,.5,0))
+    plot(both$Mid.Long,both$Mid.Lat,pch=19,cex=(both$Prop.male),ylim=YLIM,xlim=XLIM,col=4,
+         main=paste("Percentage of males per shot for",unique(a$SPECIES)),xlab="",ylab="Latitude")
+    legend("topright",c("10%","50%","100%"),bty="n",col=4,pch=c(19,19,19),pt.cex=c(0.1,0.5,1),cex=1.1)
+    
+    plot(both$Mid.Long,both$Mid.Lat,pch=19,cex=(both$Prop.female),ylim=YLIM,xlim=c(113,128),col="pink",
+         main=paste("Percentage of females per shot for",unique(a$SPECIES)),xlab="Longitude",ylab="Latitude")
+    
+  }
+  
+  
+  fn.plot.all.sex(subset(DATA,SPECIES=="WH"),c(-36,-26),c(113,128),N.min=9)
+  fn.plot.all.sex(subset(DATA,SPECIES=="GM"),c(-36,-26),c(113,128),N.min=9)
+  fn.plot.all.sex(subset(DATA,SPECIES=="BW"),c(-36,-25),c(113,128),N.min=9)
+  fn.plot.all.sex(subset(DATA,SPECIES=="TK"),c(-36,-17),c(113,120),N.min=9)
+  
+  
+  
+  #Schooling behaviour by shot
+  fn.school.sex=function(a,N.min)
   {
     A="NO SCHOOLING"  
     test=subset(a,SEX%in%c("M","F"))
@@ -1023,1178 +985,1260 @@ fn.school.sex=function(a,N.min)
     }
     return(A)
   }
-Schooling=vector('list',length(This.sp))
-names(Schooling)=This.sp
-for(i in 1:length(This.sp))Schooling[[i]]=fn.school.sex(subset(DATA,SPECIES==This.sp[[i]]),N.min=19)
-
-
-#Export data for royal society open science repository
-RSOS.export=subset(DATA,!is.na(LAT),select=c(SPECIES,SCIENTIFIC_NAME,SEX,FL,zone,Method,LAT,BOTDEPTH,Month))
-RSOS.export=subset(RSOS.export,LAT<0)
-colnames(RSOS.export)[match("BOTDEPTH",names(RSOS.export))]="DEPTH"
-RSOS.export$SCIENTIFIC_NAME=as.character(RSOS.export$SCIENTIFIC_NAME)
-RSOS.export$SCIENTIFIC_NAME=with(RSOS.export,ifelse(SPECIES=="CA","Scyliorhinidae",
-       ifelse(SPECIES=="MI","Rhizoprionodon acutus",
-       ifelse(SPECIES=="BN","Carcharhinus altimanus",
-       ifelse(SPECIES=="BU","Carcharhinus leucas",
-       ifelse(SPECIES=="BX","Hexanchus spp",
-       ifelse(SPECIES=="GR","Carcharhinus amblyrhynchos",
-      ifelse(SPECIES=="HG","Sphyrna mokarran",
-       ifelse(SPECIES=="HW","Eusphyra blochii",
-      ifelse(SPECIES=="LP","",
-      ifelse(SPECIES=="NS","Carcharhinus cautus",
-      ifelse(SPECIES=="PC","Pristis clavata",
-      ifelse(SPECIES=="RB","Carcharhinus melanopterus",
-      ifelse(SPECIES=="RW","Triaenodon obesus",
-      ifelse(SPECIES=="SC","Pristiophorus cirratus",
-      ifelse(SPECIES=="SF","Hemitriakis falcata",
-      ifelse(SPECIES=="SN","Hemipristis elongata",
-      ifelse(SPECIES=="WE","Hemigaleidae",
-      ifelse(SPECIES=="WG","Mustelus Sp.B",
-      SCIENTIFIC_NAME)))))))))))))))))))
-write.csv(RSOS.export,"Data.for.RSOS.csv",row.names=F)
-
-                            
-            
-
-
-#Select species for analysis (at least 100 observations overall, & > 10 observation in at least 2 zones)
-overall.n=100
-block.n=10
-min.block=10
-min.zn=50
-zone.n=2
-min.yr.zone=10
-
-Select.fn=function(dat)
-{
-  Use="NO"
+  Schooling=vector('list',length(This.sp))
+  names(Schooling)=This.sp
+  for(i in 1:length(This.sp))Schooling[[i]]=fn.school.sex(subset(DATA,SPECIES==This.sp[[i]]),N.min=19)
   
-  #Minimum number of observations overall
-  N=nrow(dat)
   
-  #Minimum number of observations per block
-  Table.blk=with(dat,table(BLOCK))
-  Table.blk=Table.blk[Table.blk>=min.block]
+  #Export data for royal society open science repository
+  RSOS.export=subset(DATA,!is.na(LAT),select=c(SPECIES,SCIENTIFIC_NAME,SEX,FL,zone,Method,LAT,BOTDEPTH,Month))
+  RSOS.export=subset(RSOS.export,LAT<0)
+  colnames(RSOS.export)[match("BOTDEPTH",names(RSOS.export))]="DEPTH"
+  RSOS.export$SCIENTIFIC_NAME=as.character(RSOS.export$SCIENTIFIC_NAME)
+  RSOS.export$SCIENTIFIC_NAME=with(RSOS.export,ifelse(SPECIES=="CA","Scyliorhinidae",
+                                                      ifelse(SPECIES=="MI","Rhizoprionodon acutus",
+                                                             ifelse(SPECIES=="BN","Carcharhinus altimanus",
+                                                                    ifelse(SPECIES=="BU","Carcharhinus leucas",
+                                                                           ifelse(SPECIES=="BX","Hexanchus spp",
+                                                                                  ifelse(SPECIES=="GR","Carcharhinus amblyrhynchos",
+                                                                                         ifelse(SPECIES=="HG","Sphyrna mokarran",
+                                                                                                ifelse(SPECIES=="HW","Eusphyra blochii",
+                                                                                                       ifelse(SPECIES=="LP","",
+                                                                                                              ifelse(SPECIES=="NS","Carcharhinus cautus",
+                                                                                                                     ifelse(SPECIES=="PC","Pristis clavata",
+                                                                                                                            ifelse(SPECIES=="RB","Carcharhinus melanopterus",
+                                                                                                                                   ifelse(SPECIES=="RW","Triaenodon obesus",
+                                                                                                                                          ifelse(SPECIES=="SC","Pristiophorus cirratus",
+                                                                                                                                                 ifelse(SPECIES=="SF","Hemitriakis falcata",
+                                                                                                                                                        ifelse(SPECIES=="SN","Hemipristis elongata",
+                                                                                                                                                               ifelse(SPECIES=="WE","Hemigaleidae",
+                                                                                                                                                                      ifelse(SPECIES=="WG","Mustelus Sp.B",
+                                                                                                                                                                             SCIENTIFIC_NAME)))))))))))))))))))
+  write.csv(RSOS.export,"Data.for.RSOS.csv",row.names=F)
   
-  #Minimum number of observations per zone
-  Table.zn=with(dat,table(zone))
-  Table.zn=Table.zn[Table.zn>=min.zn]
   
-  #Table YRs
-  Table.Yrs.Zn=with(dat,table(zone,year))
-  Table.Yrs.Zn[Table.Yrs.Zn>0]=1
-  Zone_yr=rowSums(Table.Yrs.Zn)
-  Zone_yr=Zone_yr[Zone_yr>=min.yr.zone]
   
-  #Minimum number of blocks
-#  if(N>=overall.n & length(Table.blk)>=block.n)Use="YES"
+  #Select species for analysis (at least 100 observations overall, & > 10 observation in at least 2 zones)
+  overall.n=100
+  block.n=10
+  min.block=10
+  min.zn=50
+  zone.n=2
+  min.yr.zone=10
   
-  #Selection criteria
-  if(N>=overall.n & length(Table.zn)>=zone.n & length(Zone_yr)>0)Use="YES"
+  Select.fn=function(dat)
+  {
+    Use="NO"
+    
+    #Minimum number of observations overall
+    N=nrow(dat)
+    
+    #Minimum number of observations per block
+    Table.blk=with(dat,table(BLOCK))
+    Table.blk=Table.blk[Table.blk>=min.block]
+    
+    #Minimum number of observations per zone
+    Table.zn=with(dat,table(zone))
+    Table.zn=Table.zn[Table.zn>=min.zn]
+    
+    #Table YRs
+    Table.Yrs.Zn=with(dat,table(zone,year))
+    Table.Yrs.Zn[Table.Yrs.Zn>0]=1
+    Zone_yr=rowSums(Table.Yrs.Zn)
+    Zone_yr=Zone_yr[Zone_yr>=min.yr.zone]
+    
+    #Minimum number of blocks
+    #  if(N>=overall.n & length(Table.blk)>=block.n)Use="YES"
+    
+    #Selection criteria
+    if(N>=overall.n & length(Table.zn)>=zone.n & length(Zone_yr)>0)Use="YES"
+    
+    return(Use)
+    
+  }
   
-  return(Use)
+  Selected=vector('list',length(This.sp))
+  names(Selected)=This.sp
+  for(i in 1:length(This.sp))Selected[[i]]=Select.fn(subset(DATA,SPECIES==This.sp[[i]] & year<=Current.year & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
+  ID=which(Selected=="YES")
   
-}
-
-Selected=vector('list',length(This.sp))
-names(Selected)=This.sp
-for(i in 1:length(This.sp))Selected[[i]]=Select.fn(subset(DATA,SPECIES==This.sp[[i]] & year<=Current.year & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
-ID=which(Selected=="YES")
-
-This.sp=names(ID)
-
+  This.sp=names(ID)
+  
   #sort species by importance
-a=subset(DATA,SPECIES%in%This.sp)
-SP.sort=rev(sort(table(a$SPECIES)))
-rm(a)
-This.sp=This.sp[match(names(SP.sort),This.sp)]
-
-Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark","Smooth hammerhead",
-     "Spinner shark","Spot-tail shark","Milk shark","Blacktip sharks","Tiger shark",
-     "Pencil Shark","Scalloped Hammerhead")
-
-Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
-
-names(This.sp)=Species.labels
-Species.Scient=c("C. obscurus","C. plumbeus","M. antarcticus","F. macki",
-                 "S. zygaena","C. brevipinna","C. sorrah","R. acutus","C. limbatus & C. tilstoni",
-                 "G. cuvier","H. hyugaensis","S. lewini")
-names(Species.Scient)=This.sp
-
-Species.labels.Scientific=c(expression(italic("C. obscurus")),expression(italic("C. plumbeus")),
-        expression(italic("M. antarcticus")),expression(italic("F. macki")),
-        expression(italic("S. zygaena")),expression(italic("C. brevipinna")),
-        expression(italic("C. sorrah")),expression(italic("R. acutus")),
-        expression(italic("C. limbatus & C. tilstoni")),expression(italic("G. cuvier")),        
-        expression(italic("H. hyugaensis")),expression(italic("S. lewini")))
-
-
-Store.explore=vector('list',length(This.sp))
-names(Store.explore)=This.sp
-#for(i in 1:length(This.sp))Store.explore[[i]]=fn.explore(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
-
-
-
-#Small-scale patterns
-a=subset(DATA,SPECIES%in%This.sp & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 ))
-      #show zone with max N obsv
-fun.max.N=function(a)
-{
-  d=subset(DATA,SPECIES==a & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 ))
-  Table.blk=table(d$zone,d$Month)
-  d=rowSums(Table.blk)
-  return(names(d[which(d==max(d))]))
-}
-Blk.sp=rep(NA,length(This.sp))
-names(Blk.sp)=This.sp
-for(i in 1:length(This.sp)) Blk.sp[i]= fun.max.N(This.sp[[i]])
-
-
-#Table.blk=table(a$BLOCK,a$Month,as.character(a$SPECIES))
-#Blk.sp=c(2114,3415,3415,3415,3115,2114,2114,2114,3215,3415)
-#names(Blk.sp)=sort(unique(as.character(a$SPECIES)))
-Blk.sp=Blk.sp[match(This.sp,names(Blk.sp))]
-
-Small.scale=function(dat,sP)
-{
-  boxplot(FL~Month,dat,main="",col='grey80',cex.axis=0.8)
- # legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
- mtext(sP,3,line=0,cex=1.1)
-}
+  a=subset(DATA,SPECIES%in%This.sp)
+  SP.sort=rev(sort(table(a$SPECIES)))
+  rm(a)
+  This.sp=This.sp[match(names(SP.sort),This.sp)]
   
-
-
-#Variablity by month
-tiff("Figure S5.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
-for(i in 1:length(This.sp))Small.scale(subset(DATA,SPECIES==This.sp[[i]] & !is.na(FL) &
-                                  !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
-mtext("Fork length (cm)",2,line=0.25,las=3,cex=1.25,outer=T)
-mtext("Month",1,line=0.5,cex=1.25,outer=T)
-dev.off() 
-
-#Example variablity at latitude
-Small.scale.LAT=function(dat,sP)
-{
-  boxplot(FL~LAT,dat,main="",col='grey80',cex.axis=1)
-  # legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
-  mtext(sP,3,line=0,cex=1)
-}
-
-tiff("Figure S4.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
-for(i in 1:length(This.sp))Small.scale.LAT(subset(DATA,SPECIES==This.sp[[i]] & !is.na(FL) &
-                                                !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
-mtext("Fork length (cm)",2,line=0.25,las=3,cex=1.25,outer=T)
-mtext("Latitude (?S)",1,line=0.5,cex=1.25,outer=T)
-dev.off() 
-
-
-
-
-Previous.approach="NO"  #(i.e. use lat and long as predictors)
-
-if(Previous.approach=="YES")
-{
-  Small.scale=function(dat,COL,PCH)
+  Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark","Smooth hammerhead",
+                   "Spinner shark","Spot-tail shark","Milk shark","Blacktip sharks","Tiger shark",
+                   "Pencil Shark","Scalloped Hammerhead")
+  
+  Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
+  
+  names(This.sp)=Species.labels
+  Species.Scient=c("C. obscurus","C. plumbeus","M. antarcticus","F. macki",
+                   "S. zygaena","C. brevipinna","C. sorrah","R. acutus","C. limbatus & C. tilstoni",
+                   "G. cuvier","H. hyugaensis","S. lewini")
+  names(Species.Scient)=This.sp
+  
+  Species.labels.Scientific=c(expression(italic("C. obscurus")),expression(italic("C. plumbeus")),
+                              expression(italic("M. antarcticus")),expression(italic("F. macki")),
+                              expression(italic("S. zygaena")),expression(italic("C. brevipinna")),
+                              expression(italic("C. sorrah")),expression(italic("R. acutus")),
+                              expression(italic("C. limbatus & C. tilstoni")),expression(italic("G. cuvier")),        
+                              expression(italic("H. hyugaensis")),expression(italic("S. lewini")))
+  
+  
+  Store.explore=vector('list',length(This.sp))
+  names(Store.explore)=This.sp
+  #for(i in 1:length(This.sp))Store.explore[[i]]=fn.explore(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
+  
+  
+  
+  #Small-scale patterns
+  a=subset(DATA,SPECIES%in%This.sp & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 ))
+  #show zone with max N obsv
+  fun.max.N=function(a)
   {
-    dat$Mon=factor(dat$Month,levels=1:12)
-    Tab=table(dat$Mon)
-    Tab=Tab[Tab>9]
-    dat=subset(dat,Mon%in% names(Tab))
-    ag=aggregate(FL~Mon,dat,mean)
-    ID=which(!levels(dat$Mon)%in%ag$Mon)
-    if(length(ID)>0)
-    {
-      ADD=data.frame(Mon=ID,x1=NA)
-      colnames(ADD)=colnames(ag)
-      ag=rbind(ag,ADD)    
-    }
-    ag=ag[order(ag$Mon),]
-    lines(ag$Mon,ag[,2],col=COL,lwd=2)
-    points(ag$Mon,ag[,2],col=COL,cex=1.25,pch=PCH,bg="white")
-    
+    d=subset(DATA,SPECIES==a & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 ))
+    Table.blk=table(d$zone,d$Month)
+    d=rowSums(Table.blk)
+    return(names(d[which(d==max(d))]))
   }
-  Small.scale.Sex=function(dat,COL,PCH)
+  Blk.sp=rep(NA,length(This.sp))
+  names(Blk.sp)=This.sp
+  for(i in 1:length(This.sp)) Blk.sp[i]= fun.max.N(This.sp[[i]])
+  
+  
+  #Table.blk=table(a$BLOCK,a$Month,as.character(a$SPECIES))
+  #Blk.sp=c(2114,3415,3415,3415,3115,2114,2114,2114,3215,3415)
+  #names(Blk.sp)=sort(unique(as.character(a$SPECIES)))
+  Blk.sp=Blk.sp[match(This.sp,names(Blk.sp))]
+  
+  Small.scale=function(dat,sP)
   {
-    dat$Mon=factor(dat$Month,levels=1:12)
-    Tab=table(dat$Mon)
-    Tab=Tab[Tab>9]
-    dat=subset(dat,Mon%in% names(Tab))
-    dat$Number=1
-    
-    agg.Male=aggregate(Number~Mon,subset(dat,SEX=="M"),sum)
-    names(agg.Male)[2]="N.male"
-    agg.Fem=aggregate(Number~Mon,subset(dat,SEX=="F"),sum)
-    names(agg.Fem)[2]="N.female"
-    agg.sex=merge(agg.Male,agg.Fem,by=c("Mon"),all.x=T,all.y=T)
-    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-    agg.sex$Prop=agg.sex$N.male/(agg.sex$N.male+agg.sex$N.female)
-    agg.sex=agg.sex[,c(1,4)]
-    
-    ID=which(!levels(dat$Mon)%in% agg.sex$Mon)
-    if(length(ID)>0)
-    {
-      ADD=data.frame(Mon=ID,x1=0)
-      colnames(ADD)=colnames(agg.sex)
-      agg.sex=rbind(agg.sex,ADD)    
-    }
-    agg.sex=agg.sex[order(agg.sex$Mon),]
-    lines(agg.sex$Mon,agg.sex[,2],col=COL,lwd=2)
-    points(agg.sex$Mon,agg.sex[,2],col=COL,cex=1.25,pch=PCH,bg="white")
+    boxplot(FL~Month,dat,main="",col='grey80',cex.axis=0.8)
+    # legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
+    mtext(sP,3,line=0,cex=1.1)
   }
   
-  tiff("Figure Month.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
-  par(mfcol=c(2,1),mai=c(.2,0.25,.1,.1),oma=c(2,2,.1,.1),mgp=c(1,.5,0),las=1)
-  EXP=0.95
-  #FL
-  plot(1:12,ylim=c(70,170),ylab="",xlab="",col="transparent",xaxt='n')
-  COLS=c("black","grey80","grey45","grey65","grey30","black","grey80","grey45","grey55","grey80")
-  PCHs=c(rep(17,5),21,rep(19,4))
-  IDS=c(1,5,6,9,10)
-  for(i in IDS)Small.scale(subset(DATA,SPECIES==This.sp[[i]] & zone==Blk.sp[i] & FL>0 & !is.na(FL) & FL<800 &
-                                    !(is.na(BLOCK) | BLOCK==0 )),COLS[i],PCHs[i])
-  legend("top",Species.labels.Scientific[IDS],pch=PCHs[IDS],col=COLS[IDS],bty='n',cex=EXP,pt.cex=EXP)  
-  mtext("Mean fork length (cm)",2,line=2,las=3,cex=1.5)
-  axis(1,1:12,F,tck=-0.02)
-  axis(1,seq(2,12,2),F,tck=-0.05)
   
-  #sex ratio
-  plot(1:12,ylim=c(0,1.1),ylab="",xlab="",col="transparent")
-  COLS=c("black","grey80","grey45","black","grey30","grey45","grey80","grey45","black","black")
-  PCHs=c(17,17,17,17,17,19,19,17,21,19)
-  IDS=c(3:4,7:10)
-  for(i in IDS)Small.scale.Sex(subset(DATA,SPECIES==This.sp[i]& SEX%in%c("M","F")),COLS[i],PCHs[i])
-  legend("top",Species.labels.Scientific[IDS],pch=PCHs[IDS],col=COLS[IDS],bty='n',cex=EXP,pt.cex=EXP)  
-  mtext("Proportion of males",2,line=2,las=3,cex=1.5)
-  mtext("Month",1,line=1.65,cex=1.5)
-  axis(1,1:12,F,tck=-0.02)
-  axis(1,seq(2,12,2),F,tck=-0.05)
+  
+  #Variablity by month
+  tiff("Figure S5.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
+  for(i in 1:length(This.sp))Small.scale(subset(DATA,SPECIES==This.sp[[i]] & !is.na(FL) &
+                                                  !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
+  mtext("Fork length (cm)",2,line=0.25,las=3,cex=1.25,outer=T)
+  mtext("Month",1,line=0.5,cex=1.25,outer=T)
+  dev.off() 
+  
+  #Example variablity at latitude
+  Small.scale.LAT=function(dat,sP)
+  {
+    boxplot(FL~LAT,dat,main="",col='grey80',cex.axis=1)
+    # legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
+    mtext(sP,3,line=0,cex=1)
+  }
+  
+  tiff("Figure S4.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
+  for(i in 1:length(This.sp))Small.scale.LAT(subset(DATA,SPECIES==This.sp[[i]] & !is.na(FL) &
+                                                      !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
+  mtext("Fork length (cm)",2,line=0.25,las=3,cex=1.25,outer=T)
+  mtext("Latitude (?S)",1,line=0.5,cex=1.25,outer=T)
+  dev.off() 
+  
+  
+  
+  
+  Previous.approach="NO"  #(i.e. use lat and long as predictors)
+  
+  if(Previous.approach=="YES")
+  {
+    Small.scale=function(dat,COL,PCH)
+    {
+      dat$Mon=factor(dat$Month,levels=1:12)
+      Tab=table(dat$Mon)
+      Tab=Tab[Tab>9]
+      dat=subset(dat,Mon%in% names(Tab))
+      ag=aggregate(FL~Mon,dat,mean)
+      ID=which(!levels(dat$Mon)%in%ag$Mon)
+      if(length(ID)>0)
+      {
+        ADD=data.frame(Mon=ID,x1=NA)
+        colnames(ADD)=colnames(ag)
+        ag=rbind(ag,ADD)    
+      }
+      ag=ag[order(ag$Mon),]
+      lines(ag$Mon,ag[,2],col=COL,lwd=2)
+      points(ag$Mon,ag[,2],col=COL,cex=1.25,pch=PCH,bg="white")
+      
+    }
+    Small.scale.Sex=function(dat,COL,PCH)
+    {
+      dat$Mon=factor(dat$Month,levels=1:12)
+      Tab=table(dat$Mon)
+      Tab=Tab[Tab>9]
+      dat=subset(dat,Mon%in% names(Tab))
+      dat$Number=1
+      
+      agg.Male=aggregate(Number~Mon,subset(dat,SEX=="M"),sum)
+      names(agg.Male)[2]="N.male"
+      agg.Fem=aggregate(Number~Mon,subset(dat,SEX=="F"),sum)
+      names(agg.Fem)[2]="N.female"
+      agg.sex=merge(agg.Male,agg.Fem,by=c("Mon"),all.x=T,all.y=T)
+      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+      agg.sex$Prop=agg.sex$N.male/(agg.sex$N.male+agg.sex$N.female)
+      agg.sex=agg.sex[,c(1,4)]
+      
+      ID=which(!levels(dat$Mon)%in% agg.sex$Mon)
+      if(length(ID)>0)
+      {
+        ADD=data.frame(Mon=ID,x1=0)
+        colnames(ADD)=colnames(agg.sex)
+        agg.sex=rbind(agg.sex,ADD)    
+      }
+      agg.sex=agg.sex[order(agg.sex$Mon),]
+      lines(agg.sex$Mon,agg.sex[,2],col=COL,lwd=2)
+      points(agg.sex$Mon,agg.sex[,2],col=COL,cex=1.25,pch=PCH,bg="white")
+    }
+    
+    tiff("Figure Month.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
+    par(mfcol=c(2,1),mai=c(.2,0.25,.1,.1),oma=c(2,2,.1,.1),mgp=c(1,.5,0),las=1)
+    EXP=0.95
+    #FL
+    plot(1:12,ylim=c(70,170),ylab="",xlab="",col="transparent",xaxt='n')
+    COLS=c("black","grey80","grey45","grey65","grey30","black","grey80","grey45","grey55","grey80")
+    PCHs=c(rep(17,5),21,rep(19,4))
+    IDS=c(1,5,6,9,10)
+    for(i in IDS)Small.scale(subset(DATA,SPECIES==This.sp[[i]] & zone==Blk.sp[i] & FL>0 & !is.na(FL) & FL<800 &
+                                      !(is.na(BLOCK) | BLOCK==0 )),COLS[i],PCHs[i])
+    legend("top",Species.labels.Scientific[IDS],pch=PCHs[IDS],col=COLS[IDS],bty='n',cex=EXP,pt.cex=EXP)  
+    mtext("Mean fork length (cm)",2,line=2,las=3,cex=1.5)
+    axis(1,1:12,F,tck=-0.02)
+    axis(1,seq(2,12,2),F,tck=-0.05)
+    
+    #sex ratio
+    plot(1:12,ylim=c(0,1.1),ylab="",xlab="",col="transparent")
+    COLS=c("black","grey80","grey45","black","grey30","grey45","grey80","grey45","black","black")
+    PCHs=c(17,17,17,17,17,19,19,17,21,19)
+    IDS=c(3:4,7:10)
+    for(i in IDS)Small.scale.Sex(subset(DATA,SPECIES==This.sp[i]& SEX%in%c("M","F")),COLS[i],PCHs[i])
+    legend("top",Species.labels.Scientific[IDS],pch=PCHs[IDS],col=COLS[IDS],bty='n',cex=EXP,pt.cex=EXP)  
+    mtext("Proportion of males",2,line=2,las=3,cex=1.5)
+    mtext("Month",1,line=1.65,cex=1.5)
+    axis(1,1:12,F,tck=-0.02)
+    axis(1,seq(2,12,2),F,tck=-0.05)
+    dev.off()
+    
+  }
+  
+  
+  
+  #2. Spatial patterns in size
+  Use.Lat.Long="NO"
+  
+  if(Use.Lat.Long=="YES")
+  {
+    
+    #2.1. Prelim analyses
+    #Colinearity
+    for(i in 1:length(This.sp))fn.colinearity(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
+    
+    #Confounding
+    tabl.terms=function(dat)
+    {
+      dat$LONG=as.factor(dat$LONG)
+      dat$LAT=as.factor(dat$LAT)
+      table(dat$LAT,dat$LONG)
+    }
+    Table.Conf=vector('list',length(This.sp))
+    names(Table.Conf)=This.sp
+    for(i in 1:length(This.sp))Table.Conf[[i]]=tabl.terms(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
+    
+    fn.size=function(dat)
+    {
+      
+      #remove lat-long combos with less than 10 observations
+      dat$PASTED=paste(dat$LAT,dat$LONG)
+      These.Lats.Longs=table(dat$PASTED)
+      These.Lats.Longs=These.Lats.Longs[These.Lats.Longs>10]
+      dat=subset(dat,PASTED%in%names(These.Lats.Longs))
+      
+      if(This.sp[i]=="PE")dat=subset(dat,!LAT==(-15))
+      if(This.sp[i]=="BW")dat=subset(dat,!LONG==(121))
+      if(This.sp[i]%in%c("WH","HZ","LG"))dat=subset(dat,!LONG%in%c(116,117))
+      
+      #put as factors
+      dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
+      dat$LONG=as.factor(dat$LONG)
+      dat$LAT=as.factor(dat$LAT)
+      
+      #model  
+      if(!i%in%simpler.model)model<- glm(log(FL)~LAT+LONG+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
+      if(i%in%simpler.model)model<- glm(log(FL)~LAT+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
+      #model<- glm(log(FL)~Mid.Lat*Mid.Long+BOTDEPTH+Method, data=dat, family=gaussian, maxit=500)
+      
+      #Anova
+      Signifcance1=anova(model,test="Chisq")
+      
+      #Deviance explained
+      Dev.exp=Dsquared(model,adjust=F)$d3
+      
+      return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
+    }
+    simpler.model=match(c("BT","MI","PE","SO","TG","PN"),This.sp)
+  }
+  
+  
+  #compare size distribution for GN and LL used in the same latitudinal bands
+  comp.meth.fn=function(dat,SNAME)
+  {
+    YMAX=max(dat$FL,na.rm=T)
+    Tab=table(dat$LAT,dat$Method)
+    Tab=ifelse(Tab>5,1,0)
+    Tab=subset(Tab,rowSums(Tab)==2) #get lats where both gears used
+    Common.lat=rownames(Tab)
+    fn.dens=function(a)density(a,adjust=2,na.rm=T,from=10,to=YMAX)
+    if(length(Tab)>0)
+    {
+      GN.Same.lat=fn.dens(subset(dat, Method=="GN" & as.numeric(as.character(LAT))%in%Common.lat)$FL)
+      LL.Same.lat=fn.dens(subset(dat, Method=="LL" & as.numeric(as.character(LAT))%in%Common.lat)$FL)
+      plot(GN.Same.lat,main="",ylim=c(0,max(c(GN.Same.lat$y,LL.Same.lat$y))),
+           xlim=c(0,YMAX),lwd=3,xlab="",ylab="",cex.axis=1.25)
+      lines(LL.Same.lat,col="grey60",lwd=3)
+      mtext(SNAME,3,cex=1.15)    
+    }
+    #   if(length(Tab)==0)
+    #   {
+    #     plot(1:10,1:10,col="transparent",yaxt='n',xaxt='n',ann=F,main=This.sp[i])
+    #     text(5,5,"no data for both gears")
+    #   }
+    
+  }
+  tiff("Size distr. BN LL same Lats.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(3,3),mai=c(0.4,0.6,0.2,0.1),oma=c(1,1.2,0.15,0.01),las=1,mgp=c(1,.6,0))
+  for(i in 1:length(This.sp))comp.meth.fn(subset(DATA,SPECIES==This.sp[i] & LAT <0),Species.labels.Scientific[i])
+  plot(1,xaxt='n',yaxt='n',ylab='',xlab='',col="transparent")
+  box(col="white")
+  legend("center",c("Gillnet","Longline"),lty=1,lwd=3,col=c(1,"grey60"),bty="n",cex=2.5)
+  mtext("Density",2,-.75,outer=T,cex=1.6,las=3)
+  mtext("Fork length (cm)",1,-.5,outer=T,cex=1.6)
   dev.off()
   
-}
-
-
-
-#2. Spatial patterns in size
-Use.Lat.Long="NO"
-
-if(Use.Lat.Long=="YES")
-{
-  
-  #2.1. Prelim analyses
-  #Colinearity
-  for(i in 1:length(This.sp))fn.colinearity(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
-  
-  #Confounding
-  tabl.terms=function(dat)
+  #explore data used in GLM
+  fn.explr=function(dat)
   {
-    dat$LONG=as.factor(dat$LONG)
-    dat$LAT=as.factor(dat$LAT)
-    table(dat$LAT,dat$LONG)
-  }
-  Table.Conf=vector('list',length(This.sp))
-  names(Table.Conf)=This.sp
-  for(i in 1:length(This.sp))Table.Conf[[i]]=tabl.terms(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
-  
-  fn.size=function(dat)
-  {
-    
     #remove lat-long combos with less than 10 observations
-    dat$PASTED=paste(dat$LAT,dat$LONG)
-    These.Lats.Longs=table(dat$PASTED)
-    These.Lats.Longs=These.Lats.Longs[These.Lats.Longs>10]
-    dat=subset(dat,PASTED%in%names(These.Lats.Longs))
-    
     if(This.sp[i]=="PE")dat=subset(dat,!LAT==(-15))
     if(This.sp[i]=="BW")dat=subset(dat,!LONG==(121))
     if(This.sp[i]%in%c("WH","HZ","LG"))dat=subset(dat,!LONG%in%c(116,117))
     
     #put as factors
-    dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
-    dat$LONG=as.factor(dat$LONG)
-    dat$LAT=as.factor(dat$LAT)
+    par(mfcol=c(3,2))
+    Cl=1:length(levels(as.factor(dat$zone)))
+    with(dat,interaction.plot(as.factor(round(BOTDEPTH/10)*10),as.factor(zone),  log(FL),fixed = TRUE,col=Cl,main=This.sp[i]))
+    plot(log(FL)~as.factor(round(BOTDEPTH/10)*10),dat,main="10")
+    plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),dat,main="25")
+    with(dat,interaction.plot(as.factor(year),as.factor(zone),  log(FL),fixed = TRUE,col=Cl,main="annual trends by zone"))
+    plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),subset(dat,SEX=="F"),main="25 female",col="pink")
+    plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),subset(dat,SEX=="M"),main="25 male",col="blue")
     
-    #model  
-    if(!i%in%simpler.model)model<- glm(log(FL)~LAT+LONG+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
-    if(i%in%simpler.model)model<- glm(log(FL)~LAT+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
-    #model<- glm(log(FL)~Mid.Lat*Mid.Long+BOTDEPTH+Method, data=dat, family=gaussian, maxit=500)
-    
-    #Anova
-    Signifcance1=anova(model,test="Chisq")
-    
-    #Deviance explained
-    Dev.exp=Dsquared(model,adjust=F)$d3
-    
-    return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
   }
-  simpler.model=match(c("BT","MI","PE","SO","TG","PN"),This.sp)
-}
-
-
-#compare size distribution for GN and LL used in the same latitudinal bands
-comp.meth.fn=function(dat,SNAME)
-{
-  YMAX=max(dat$FL,na.rm=T)
-  Tab=table(dat$LAT,dat$Method)
-  Tab=ifelse(Tab>5,1,0)
-  Tab=subset(Tab,rowSums(Tab)==2) #get lats where both gears used
-  Common.lat=rownames(Tab)
-  fn.dens=function(a)density(a,adjust=2,na.rm=T,from=10,to=YMAX)
-  if(length(Tab)>0)
-  {
-    GN.Same.lat=fn.dens(subset(dat, Method=="GN" & as.numeric(as.character(LAT))%in%Common.lat)$FL)
-    LL.Same.lat=fn.dens(subset(dat, Method=="LL" & as.numeric(as.character(LAT))%in%Common.lat)$FL)
-    plot(GN.Same.lat,main="",ylim=c(0,max(c(GN.Same.lat$y,LL.Same.lat$y))),
-         xlim=c(0,YMAX),lwd=3,xlab="",ylab="",cex.axis=1.25)
-    lines(LL.Same.lat,col="grey60",lwd=3)
-    mtext(SNAME,3,cex=1.15)    
-  }
-#   if(length(Tab)==0)
-#   {
-#     plot(1:10,1:10,col="transparent",yaxt='n',xaxt='n',ann=F,main=This.sp[i])
-#     text(5,5,"no data for both gears")
-#   }
-
-}
-tiff("Size distr. BN LL same Lats.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(3,3),mai=c(0.4,0.6,0.2,0.1),oma=c(1,1.2,0.15,0.01),las=1,mgp=c(1,.6,0))
-for(i in 1:length(This.sp))comp.meth.fn(subset(DATA,SPECIES==This.sp[i] & LAT <0),Species.labels.Scientific[i])
-plot(1,xaxt='n',yaxt='n',ylab='',xlab='',col="transparent")
-box(col="white")
-legend("center",c("Gillnet","Longline"),lty=1,lwd=3,col=c(1,"grey60"),bty="n",cex=2.5)
-mtext("Density",2,-.75,outer=T,cex=1.6,las=3)
-mtext("Fork length (cm)",1,-.5,outer=T,cex=1.6)
-dev.off()
-
-#explore data used in GLM
-fn.explr=function(dat)
-{
-  #remove lat-long combos with less than 10 observations
-  if(This.sp[i]=="PE")dat=subset(dat,!LAT==(-15))
-  if(This.sp[i]=="BW")dat=subset(dat,!LONG==(121))
-  if(This.sp[i]%in%c("WH","HZ","LG"))dat=subset(dat,!LONG%in%c(116,117))
+  for(i in 1:length(This.sp))fn.explr(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
   
-  #put as factors
-  par(mfcol=c(3,2))
-  Cl=1:length(levels(as.factor(dat$zone)))
-  with(dat,interaction.plot(as.factor(round(BOTDEPTH/10)*10),as.factor(zone),  log(FL),fixed = TRUE,col=Cl,main=This.sp[i]))
-  plot(log(FL)~as.factor(round(BOTDEPTH/10)*10),dat,main="10")
-  plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),dat,main="25")
-  with(dat,interaction.plot(as.factor(year),as.factor(zone),  log(FL),fixed = TRUE,col=Cl,main="annual trends by zone"))
-  plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),subset(dat,SEX=="F"),main="25 female",col="pink")
-  plot(log(FL)~as.factor(round(BOTDEPTH/25)*25),subset(dat,SEX=="M"),main="25 male",col="blue")
   
-}
-for(i in 1:length(This.sp))fn.explr(subset(DATA,SPECIES==This.sp[i] & FL>0 & !is.na(FL) & FL<800 & !(is.na(BLOCK) | BLOCK==0 )))
-
-
   #2.2. Run GLM
-#note: change order of terms to see if d.f. change, if so, then confounding!!
-
+  #note: change order of terms to see if d.f. change, if so, then confounding!!
+  
   #set zone levels (then relevel within GLM function)
-Zone.order=c("Joint","North","Closed","West","Zone1","Zone2")
-DATA$zone=factor(DATA$zone,levels=Zone.order)
-
+  Zone.order=c("Joint","North","Closed","West","Zone1","Zone2")
+  DATA$zone=factor(DATA$zone,levels=Zone.order)
+  
   #check number of observations for each combo of factors
-fn.chk.combo=function(d,depth.bin)
-{
-  D=subset(DATA,SPECIES==d,select=c(BOTDEPTH,FL,zone,Method,SEX))
-  D$Depth.bin=round(D$BOTDEPTH/depth.bin)*depth.bin
-  datFL=subset(D,BOTDEPTH<=250 & FL>0 & !is.na(FL) & FL<800 & !is.na(zone))
-  datSx=subset(D,SEX%in%c("F","M") & !is.na(zone))
-  
-  Tab.FL=with(datFL,table(Method,Depth.bin,zone))
-  a=as.data.frame.table(Tab.FL, responseName = "value")
-  wide=reshape(a,v.names ="value" , idvar = c("Method","zone"),
-            timevar = "Depth.bin", direction = "wide")
-  colnames(wide)[3:ncol(wide)]=substr(colnames(wide)[3:ncol(wide)],7,15)
-  wide.FL=cbind(data.frame(Species=d),wide)
-
-  Tab.Sx=with(datSx,table(Method,Depth.bin,zone))
-  a=as.data.frame.table(Tab.Sx, responseName = "value")
-  wide=reshape(a,v.names ="value" , idvar = c("Method","zone"),
-               timevar = "Depth.bin", direction = "wide")
-  colnames(wide)[3:ncol(wide)]=substr(colnames(wide)[3:ncol(wide)],7,15)
-  wide.Sx=cbind(data.frame(Species=d),wide)
-
-  return(list(FL=wide.FL,Sx=wide.Sx))
-}
-Store.chek.FL=Store.chek.Sx=vector('list',length(This.sp))
-for(i in 1:length(This.sp))
-{
-  dummy=fn.chk.combo(This.sp[[i]],25)
-  Store.chek.FL[[i]]=dummy$FL
-  Store.chek.Sx[[i]]=dummy$Sx
-}
- 
-
-
-if(Use.Lat.Long=="NO")
-{
-   fn.size=function(dat,depth.bin)
+  fn.chk.combo=function(d,depth.bin)
   {
-    dat=subset(dat,BOTDEPTH<=250 & FL>0 & !is.na(FL) & FL<800 & !is.na(zone))
+    D=subset(DATA,SPECIES==d,select=c(BOTDEPTH,FL,zone,Method,SEX))
+    D$Depth.bin=round(D$BOTDEPTH/depth.bin)*depth.bin
+    datFL=subset(D,BOTDEPTH<=250 & FL>0 & !is.na(FL) & FL<800 & !is.na(zone))
+    datSx=subset(D,SEX%in%c("F","M") & !is.na(zone))
     
-    #put as factors
-    dat$zone=factor(dat$zone)
-    dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/depth.bin)*depth.bin)
-    dat$year=as.factor(dat$year)
-
+    Tab.FL=with(datFL,table(Method,Depth.bin,zone))
+    a=as.data.frame.table(Tab.FL, responseName = "value")
+    wide=reshape(a,v.names ="value" , idvar = c("Method","zone"),
+                 timevar = "Depth.bin", direction = "wide")
+    colnames(wide)[3:ncol(wide)]=substr(colnames(wide)[3:ncol(wide)],7,15)
+    wide.FL=cbind(data.frame(Species=d),wide)
     
-    #model  
-    model<- glm(log(FL)~zone+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
-
-    #Anova
-    Signifcance1=anova(model,test="Chisq")
+    Tab.Sx=with(datSx,table(Method,Depth.bin,zone))
+    a=as.data.frame.table(Tab.Sx, responseName = "value")
+    wide=reshape(a,v.names ="value" , idvar = c("Method","zone"),
+                 timevar = "Depth.bin", direction = "wide")
+    colnames(wide)[3:ncol(wide)]=substr(colnames(wide)[3:ncol(wide)],7,15)
+    wide.Sx=cbind(data.frame(Species=d),wide)
     
-    #Deviance explained
-    Dev.exp=Dsquared(model,adjust=F)$d3
-    
-    return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
+    return(list(FL=wide.FL,Sx=wide.Sx))
   }
-}
-
-Output.GLM=vector('list',length(This.sp))
-names(Output.GLM)=This.sp
-Output.GLM.25=Output.GLM
-for(i in 1:length(Output.GLM))Output.GLM[[i]]=fn.size(subset(DATA,SPECIES==This.sp[i]),10)
-for(i in 1:length(Output.GLM))Output.GLM.25[[i]]=fn.size(subset(DATA,SPECIES==This.sp[i]),25)
-
-
-
-#Check fit diagnostics
-  #fit plots
-for(i in 1:length(Output.GLM)) fn.plot.diag(Output.GLM[[i]]$model,This.sp[i])
-
-  #predictions
-pred.fn=function(dat,Model,Thisvar,NAME)
-{
-  newdat=dat[,match(Thisvar,names(dat))]
-  
-  biasCorr <- Model$deviance/Model$df.residual/2
-  dat$pred=exp(predict(Model,newdat)+biasCorr)
-  
-  plot(dat$FL,dat$pred,main=NAME,pch=19,col=2,ylab="Predicted",xlab="Observed")
-  lines(dat$FL,dat$FL,lwd=2)
-  return(dat)
-}
-
-ThisVar=vector('list',length(Output.GLM))
-if(Use.Lat.Long=="YES")
-{
-  ThisVar[[1]]=ThisVar[[2]]=ThisVar[[3]]=ThisVar[[4]]=ThisVar[[5]]=ThisVar[[6]]=c("LAT","LONG","BOTDEPTH.bin")
-  ThisVar[[7]]=ThisVar[[8]]=ThisVar[[9]]=ThisVar[[10]]=ThisVar[[11]]=ThisVar[[12]]=c("LAT","BOTDEPTH.bin")  
-}
-if(Use.Lat.Long=="NO") for (i in 1:length(ThisVar)) ThisVar[[i]]=c("zone","BOTDEPTH.bin")
-
-
-Store.preds=vector('list',length(Output.GLM))
-par(mfcol=c(5,3),mai=c(0.4,0.4,0.12,0.1),oma=c(1,1.2,0.15,0.01))
-for(i in 1:length(Output.GLM))Store.preds[[i]]=pred.fn(Output.GLM[[i]]$data,Output.GLM[[i]]$model,ThisVar[[i]],This.sp[i])
-
-
-  #2.3. Get term significance 
-ColNam=c("Species","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot")
-Term.Mat=matrix(nrow=length(Output.GLM),ncol=length(ColNam))
-colnames(Term.Mat)=ColNam
-Term.Mat=as.data.frame(Term.Mat)
-for(i in 1:length(Output.GLM))
-{
-  Term.Mat$Species[i]=names(Output.GLM)[i]
-  Anov=round(Output.GLM[[i]]$Anova$"Pr(>Chi)",3)
-  Term.Mat$P_Zone[i]=Anov[2]
-  Term.Mat$P_Depth[i]=Anov[3]  
-  Dev=round(fn.dev.exp.term(Output.GLM[[i]]))
-  Term.Mat$Dev.exp_Zone[i]=Dev[1]
-  Term.Mat$Dev.exp_Depth[i]=Dev[2]
-  Term.Mat$Dev.exp_Tot[i]=Dev[1]+Dev[2]
-  #Term.Mat$Dev.exp_Tot[i]=round(Output.GLM[[i]]$Dev.exp)
-}
-Term.Mat$P_Zone=ifelse(Term.Mat$P_Zone==0,'<0.001',Term.Mat$P_Zone)
-Term.Mat$P_Depth=ifelse(Term.Mat$P_Depth==0,'<0.001',Term.Mat$P_Depth)
-
-Term.Mat=merge(Term.Mat,data.frame(Scientific=Species.Scient,Species=names(Species.Scient)),by="Species")
-Term.Mat=Term.Mat[ match(This.sp,Term.Mat$Species),]
-Term.Mat=Term.Mat[,match(c("Scientific","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot"),names(Term.Mat))]
-names(Term.Mat)[1]="Species"
-
-#Export as table
-Model.tbl=function(WD,Tbl,Doc.nm,caption,paragph,HdR.col,HdR.bg,Hdr.fnt.sze,Hdr.bld,
-                   body.fnt.sze,Grid.col,Fnt.hdr,Fnt.body,
-                   HDR.names,HDR.span,HDR.2nd)
-{
-  mydoc = docx(Doc.nm)  #create r object
-  mydoc = addSection( mydoc, landscape = T )   #landscape table
-  # add title
-  if(!is.na(caption))mydoc = addParagraph(mydoc, caption, stylename = "TitleDoc" )
-  
-  # add a paragraph
-  if(!is.na(paragph))mydoc = addParagraph(mydoc , paragph, stylename="Citationintense")
-  
-  #add table
-  MyFTable=FlexTable(Tbl,header.column=F,add.rownames =F,
-                     header.cell.props = cellProperties(background.color=HdR.bg), 
-                     header.text.props = textProperties(color=HdR.col,font.size=Hdr.fnt.sze,
-                                                        font.weight="bold",font.family =Fnt.hdr), 
-                     body.text.props = textProperties(font.size=body.fnt.sze,font.family =Fnt.body))
-  
-  #Add header
-  MyFTable = addHeaderRow(MyFTable,text.properties=textBold(),value=HDR.names,colspan=HDR.span)
-  
-  #Add second header
-  MyFTable = addHeaderRow(MyFTable, text.properties = textBold(),value =HDR.2nd)
-  
-  
-  # table borders
-  MyFTable = setFlexTableBorders(MyFTable,
-                                 inner.vertical = borderNone(),inner.horizontal = borderNone(),
-                                 outer.vertical = borderNone(),
-                                 outer.horizontal = borderProperties(color=Grid.col, style="solid", width=4))
-  
-  # set columns widths (in inches)
-  #MyFTable = setFlexTableWidths( MyFTable, widths = Col.width)
-  
-  mydoc = addFlexTable( mydoc, MyFTable)   
-  mydoc = addSection( mydoc, landscape = F ) 
-  
-  # write the doc 
-  writeDoc( mydoc, file = paste(Doc.nm,".docx",sep=''))
-}
-
-Model.tbl(WD=getwd(),Tbl=Term.Mat,Doc.nm="Model FL",caption=NA,paragph=NA,
-          HdR.col='black',HdR.bg='white',Hdr.fnt.sze=12,Hdr.bld='normal',body.fnt.sze=12,
-          Grid.col='black',Fnt.hdr= "Arial",Fnt.body= "Arial",
-          HDR.names=c('Species','P','Deviance explained (%)'),
-          HDR.span=c(1,2,3),HDR.2nd=c("","Zone","Depth","Zone","Depth","total"))
-
-
-  #2.4. Show Spatial patterns
-
-Zone.mid.point="NO"  #show by block
-Zone.mid.Lat=c(-13.71, -16.97, -21.80, -29, -34, -34)
-Zone.mid.Long= c(125.63, 118.76, 111.83, 112.34, 113.43, 122.49) 
-Zone.mids=data.frame(zone=c("Joint","North","Closed","West","Zone1","Zone2"),
-                     Zone.mid.Lat=Zone.mid.Lat,
-                     Zone.mid.Long=Zone.mid.Long)
-
-fn.show.spatial.FL=function(dat,pred,WHAT)
-{
-  if(Zone.mid.point=="YES")
+  Store.chek.FL=Store.chek.Sx=vector('list',length(This.sp))
+  for(i in 1:length(This.sp))
   {
-    dat=merge(dat,Zone.mids,by="zone",all.x=T)
-    dat$LAT=dat$Zone.mid.Lat
-    dat$LONG=dat$Zone.mid.Long
+    dummy=fn.chk.combo(This.sp[[i]],25)
+    Store.chek.FL[[i]]=dummy$FL
+    Store.chek.Sx[[i]]=dummy$Sx
   }
   
-  dat=subset(dat,!(Mid.Long>114.5342 & Mid.Long<115.3386 & Mid.Lat< (-27.13656) & Mid.Lat> (-28.42635)))
-  dat=subset(dat,!(Mid.Long>114.7817 & Mid.Long<119.4223 & Mid.Lat< (-23.65974) & Mid.Lat> (-26.35147)))
-  dat=subset(dat,!(Mid.Long>114.6579 & Mid.Long<115.5242 & Mid.Lat< (-22.70642) & Mid.Lat> (-23.37935)))
-  
-  dat$LONG=as.numeric(as.character((dat$LONG)))
-  dat$LAT=as.numeric(as.character((dat$LAT)))
-  
-  pred$LONG=as.numeric(as.character((pred$LONG)))
-  pred$LAT=as.numeric(as.character((pred$LAT)))
   
   
-  #Observations
-  if(WHAT=="obs") meanFL=aggregate(FL~LONG+LAT,dat,mean) #plot observations
-  if(WHAT=="preds") meanFL=aggregate(FL~LONG+LAT,pred,mean)  #plot predictions
-  
-  plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
-          plt = NULL,col="grey95",tck = 0.025, tckMinor = 0.0125,
-          xlab="",ylab="",axes=F)
-  
-  #add zones
-  plot(WA_Northern_Shark,add=T,col="grey85")
-  plot(JA_Northern_Shark,ylim=c(-39,-11),xlim=c(108,130),add=T,col="grey40")
-  plot(WA_Northern_Shark_2,add=T,col=1,angle=0,density=seq(5,35,2))
-  plot(WA_Northern_Shark_2,add=T,col=1,angle=90,density=seq(5,35,2))
-  plot(WCDGDLL,add=T,col="grey70")
-  plot(SDGDLL_zone1,add=T,col="white")
-  plot(SDGDLL_zone2,add=T,col="grey55")
-  
-  lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="black")
-  points(meanFL$LONG,meanFL$LAT-0.5,cex=meanFL$FL/150,pch=19,col=1)
-  
-  text(109,-14,paste("N=",nrow(dat),sep=""),cex=.8,pos=4)
-  axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
-  axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.065)
-  axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
-  axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.065)  
-
-  box() 
-  
-}
-
-tiff("Figure 1.tiff",width = 1100, height = 1900,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(0.1,.15,0.125,.05),oma=c(2.25,2,0.1,0.05),las=1,mgp=c(1,.55,0))
-for(i in 1:length(Output.GLM))
-{
-  fn.show.spatial.FL(Output.GLM[[i]]$data,Store.preds[[i]],'obs')
-  
-  if(names(Output.GLM)[i]=="BT")mtext(Species.labels.Scientific[i],3,cex=0.6)
-  if(!names(Output.GLM)[i]=="BT")mtext(Species.labels.Scientific[i],3,cex=0.7)
-  if(i%in%c(1:4))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.15,las=2,tck=-0.08)
-  if(i%in%c(4,8,12)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.15,tck=-0.08)
-  
-  if(i==1)
+  if(Use.Lat.Long=="NO")
   {
-    legend(111,-21,"Western",bty='n',cex=1.25)
-    legend(111,-24,"Australia",bty='n',cex=1.25)
-  }
-  
-  # add size reference
-  if(i==9)
-  {
-    points(rep(117,3),c(-23,-26,-29),cex=c(100,200,300)/150,pch=19,col=1)
-    text(rep(117,3),c(-23,-26,-29),c("100 cm","200 cm","300 cm"),pos=4)
-  }
-  
-  # add zone reference
-  if(i==11)
-  {
-    PoSi=seq(-32.25,-21.5,length.out=6)
-    Zn.leg=rev(c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2"))
-    Zn.col=rev(c("grey40","grey85",NA,"grey70","white","grey55"))
-    pCH=rev(c(22,22,12,22,22,22))
-    for(t in 1:length(Zn.leg))
+    fn.size=function(dat,depth.bin)
     {
-      points(117,PoSi[t],pch=pCH[t],bg=Zn.col[t],cex=1.35)
-      text(117,PoSi[t],Zn.leg[t],pos=4,cex=0.9)
+      dat=subset(dat,BOTDEPTH<=250 & FL>0 & !is.na(FL) & FL<800 & !is.na(zone))
+      
+      #put as factors
+      dat$zone=factor(dat$zone)
+      dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/depth.bin)*depth.bin)
+      dat$year=as.factor(dat$year)
+      
+      
+      #model  
+      model<- glm(log(FL)~zone+BOTDEPTH.bin, data=dat, family=gaussian, maxit=500)
+      
+      #Anova
+      Signifcance1=anova(model,test="Chisq")
+      
+      #Deviance explained
+      Dev.exp=Dsquared(model,adjust=F)$d3
+      
+      return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
     }
   }
-}
-
-mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
-mtext("Latitude (?S)",side=2,line=0.725,font=1,las=0,cex=1.15,outer=T)
-dev.off()
-
-
-
-  #coefs
-fn.plot.coef=function(Mod,dat,what)
-{
-  all.coef=summary(Mod)$coefficients
-  id=grep(what,row.names(all.coef))
   
-  if(length(id)>0)
+  Output.GLM=vector('list',length(This.sp))
+  names(Output.GLM)=This.sp
+  Output.GLM.25=Output.GLM
+  for(i in 1:length(Output.GLM))Output.GLM[[i]]=fn.size(subset(DATA,SPECIES==This.sp[i]),10)
+  for(i in 1:length(Output.GLM))Output.GLM.25[[i]]=fn.size(subset(DATA,SPECIES==This.sp[i]),25)
+  
+  
+  
+  #Check fit diagnostics
+  #fit plots
+  for(i in 1:length(Output.GLM)) fn.plot.diag(Output.GLM[[i]]$model,This.sp[i])
+  
+  #predictions
+  pred.fn=function(dat,Model,Thisvar,NAME)
   {
-    x=1:length(c(0,all.coef[id,1]))
-    y=c(0,all.coef[id,1])
-    CI=2*c(0,all.coef[id,2])
-    YLIM=c(min(y-CI)*1.25,max(y+CI)*1.25)
-    plot(x,y,ylab="",xlab="",xaxt='n',ylim=YLIM,pch=19)
-    segments(x,y-CI,x,y+CI)
-    axis(1,x,dat)
-  }
+    newdat=dat[,match(Thisvar,names(dat))]
     
-}
-
-tiff("Coef_Zone_FL.tiff",width = 1500, height = 2000,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(0.2,.3,0.18,.1),oma=c(2.25,2,0.15,0.1),las=1,mgp=c(1,.5,0))
-
-for(i in 1:length(Output.GLM))
-{
-  fn.plot.coef(Output.GLM[[i]]$model,levels(Output.GLM[[i]]$data$zone),"zone")
-  mtext(Species.labels[i],3,cex=0.9)
+    biasCorr <- Model$deviance/Model$df.residual/2
+    dat$pred=exp(predict(Model,newdat)+biasCorr)
+    
+    plot(dat$FL,dat$pred,main=NAME,pch=19,col=2,ylab="Predicted",xlab="Observed")
+    lines(dat$FL,dat$FL,lwd=2)
+    return(dat)
+  }
   
-}
-mtext("Zone",1,line=1,outer=T,cex=1.5)
-mtext("Coefficient",2,line=0,outer=T,las=3,cex=1.5)
-dev.off()
-
-
-    #show variability in data
-Zone.names=Zone.order
-names(Zone.names)=c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2")
-
-fn.show.spatial.FL_obs=function(dat,sP)
-{
-  #NMs=names(Zone.names[match(levels(dat$zone),Zone.names)])
-  NMs=levels(dat$zone)
-  boxplot(FL~zone,dat,main="",col='grey80',names=NMs,cex.axis=.9)
-  mtext(sP,3,line=0,cex=1.1)
-}
-
-tiff("Figure S1.tiff",width = 2400, height = 2000,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(.2,0.2,.175,.04),oma=c(2,1.5,.2,.01),mgp=c(1,.4,0),las=1)
-for(i in 1:length(This.sp))fn.show.spatial.FL_obs(Output.GLM[[i]]$data,Species.labels.Scientific[i])
-mtext("Fork length (cm)",2,line=0.15,las=3,cex=1.25,outer=T)
-mtext("Zone",1,line=0.5,cex=1.25,outer=T)
-dev.off() 
-
-
-  #2.5 Show Depth effects
-
+  ThisVar=vector('list',length(Output.GLM))
+  if(Use.Lat.Long=="YES")
+  {
+    ThisVar[[1]]=ThisVar[[2]]=ThisVar[[3]]=ThisVar[[4]]=ThisVar[[5]]=ThisVar[[6]]=c("LAT","LONG","BOTDEPTH.bin")
+    ThisVar[[7]]=ThisVar[[8]]=ThisVar[[9]]=ThisVar[[10]]=ThisVar[[11]]=ThisVar[[12]]=c("LAT","BOTDEPTH.bin")  
+  }
+  if(Use.Lat.Long=="NO") for (i in 1:length(ThisVar)) ThisVar[[i]]=c("zone","BOTDEPTH.bin")
+  
+  
+  Store.preds=vector('list',length(Output.GLM))
+  par(mfcol=c(5,3),mai=c(0.4,0.4,0.12,0.1),oma=c(1,1.2,0.15,0.01))
+  for(i in 1:length(Output.GLM))Store.preds[[i]]=pred.fn(Output.GLM[[i]]$data,Output.GLM[[i]]$model,ThisVar[[i]],This.sp[i])
+  
+  
+  #2.3. Get term significance 
+  ColNam=c("Species","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot")
+  Term.Mat=matrix(nrow=length(Output.GLM),ncol=length(ColNam))
+  colnames(Term.Mat)=ColNam
+  Term.Mat=as.data.frame(Term.Mat)
+  for(i in 1:length(Output.GLM))
+  {
+    Term.Mat$Species[i]=names(Output.GLM)[i]
+    Anov=round(Output.GLM[[i]]$Anova$"Pr(>Chi)",3)
+    Term.Mat$P_Zone[i]=Anov[2]
+    Term.Mat$P_Depth[i]=Anov[3]  
+    Dev=round(fn.dev.exp.term(Output.GLM[[i]]))
+    Term.Mat$Dev.exp_Zone[i]=Dev[1]
+    Term.Mat$Dev.exp_Depth[i]=Dev[2]
+    Term.Mat$Dev.exp_Tot[i]=Dev[1]+Dev[2]
+    #Term.Mat$Dev.exp_Tot[i]=round(Output.GLM[[i]]$Dev.exp)
+  }
+  Term.Mat$P_Zone=ifelse(Term.Mat$P_Zone==0,'<0.001',Term.Mat$P_Zone)
+  Term.Mat$P_Depth=ifelse(Term.Mat$P_Depth==0,'<0.001',Term.Mat$P_Depth)
+  
+  Term.Mat=merge(Term.Mat,data.frame(Scientific=Species.Scient,Species=names(Species.Scient)),by="Species")
+  Term.Mat=Term.Mat[ match(This.sp,Term.Mat$Species),]
+  Term.Mat=Term.Mat[,match(c("Scientific","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot"),names(Term.Mat))]
+  names(Term.Mat)[1]="Species"
+  
+  #Export as table
+  Model.tbl=function(WD,Tbl,Doc.nm,caption,paragph,HdR.col,HdR.bg,Hdr.fnt.sze,Hdr.bld,
+                     body.fnt.sze,Grid.col,Fnt.hdr,Fnt.body,
+                     HDR.names,HDR.span,HDR.2nd)
+  {
+    mydoc = docx(Doc.nm)  #create r object
+    mydoc = addSection( mydoc, landscape = T )   #landscape table
+    # add title
+    if(!is.na(caption))mydoc = addParagraph(mydoc, caption, stylename = "TitleDoc" )
+    
+    # add a paragraph
+    if(!is.na(paragph))mydoc = addParagraph(mydoc , paragph, stylename="Citationintense")
+    
+    #add table
+    MyFTable=FlexTable(Tbl,header.column=F,add.rownames =F,
+                       header.cell.props = cellProperties(background.color=HdR.bg), 
+                       header.text.props = textProperties(color=HdR.col,font.size=Hdr.fnt.sze,
+                                                          font.weight="bold",font.family =Fnt.hdr), 
+                       body.text.props = textProperties(font.size=body.fnt.sze,font.family =Fnt.body))
+    
+    #Add header
+    MyFTable = addHeaderRow(MyFTable,text.properties=textBold(),value=HDR.names,colspan=HDR.span)
+    
+    #Add second header
+    MyFTable = addHeaderRow(MyFTable, text.properties = textBold(),value =HDR.2nd)
+    
+    
+    # table borders
+    MyFTable = setFlexTableBorders(MyFTable,
+                                   inner.vertical = borderNone(),inner.horizontal = borderNone(),
+                                   outer.vertical = borderNone(),
+                                   outer.horizontal = borderProperties(color=Grid.col, style="solid", width=4))
+    
+    # set columns widths (in inches)
+    #MyFTable = setFlexTableWidths( MyFTable, widths = Col.width)
+    
+    mydoc = addFlexTable( mydoc, MyFTable)   
+    mydoc = addSection( mydoc, landscape = F ) 
+    
+    # write the doc 
+    writeDoc( mydoc, file = paste(Doc.nm,".docx",sep=''))
+  }
+  
+  Model.tbl(WD=getwd(),Tbl=Term.Mat,Doc.nm="Model FL",caption=NA,paragph=NA,
+            HdR.col='black',HdR.bg='white',Hdr.fnt.sze=12,Hdr.bld='normal',body.fnt.sze=12,
+            Grid.col='black',Fnt.hdr= "Arial",Fnt.body= "Arial",
+            HDR.names=c('Species','P','Deviance explained (%)'),
+            HDR.span=c(1,2,3),HDR.2nd=c("","Zone","Depth","Zone","Depth","total"))
+  
+  
+  
+  #2.4. Show Spatial patterns
+  
+  Zone.mid.point="NO"  #show by block
+  Zone.mid.Lat=c(-13.71, -16.97, -21.80, -29, -34, -34)
+  Zone.mid.Long= c(125.63, 118.76, 111.83, 112.34, 113.43, 122.49) 
+  Zone.mids=data.frame(zone=c("Joint","North","Closed","West","Zone1","Zone2"),
+                       Zone.mid.Lat=Zone.mid.Lat,
+                       Zone.mid.Long=Zone.mid.Long)
+  
+  fn.show.spatial.FL=function(dat,pred,WHAT)
+  {
+    if(Zone.mid.point=="YES")
+    {
+      dat=merge(dat,Zone.mids,by="zone",all.x=T)
+      dat$LAT=dat$Zone.mid.Lat
+      dat$LONG=dat$Zone.mid.Long
+    }
+    
+    dat=subset(dat,!(Mid.Long>114.5342 & Mid.Long<115.3386 & Mid.Lat< (-27.13656) & Mid.Lat> (-28.42635)))
+    dat=subset(dat,!(Mid.Long>114.7817 & Mid.Long<119.4223 & Mid.Lat< (-23.65974) & Mid.Lat> (-26.35147)))
+    dat=subset(dat,!(Mid.Long>114.6579 & Mid.Long<115.5242 & Mid.Lat< (-22.70642) & Mid.Lat> (-23.37935)))
+    
+    dat$LONG=as.numeric(as.character((dat$LONG)))
+    dat$LAT=as.numeric(as.character((dat$LAT)))
+    
+    pred$LONG=as.numeric(as.character((pred$LONG)))
+    pred$LAT=as.numeric(as.character((pred$LAT)))
+    
+    
+    #Observations
+    if(WHAT=="obs") meanFL=aggregate(FL~LONG+LAT,dat,mean) #plot observations
+    if(WHAT=="preds") meanFL=aggregate(FL~LONG+LAT,pred,mean)  #plot predictions
+    
+    plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
+            plt = NULL,col="grey95",tck = 0.025, tckMinor = 0.0125,
+            xlab="",ylab="",axes=F)
+    
+    #add zones
+    plot(WA_Northern_Shark,add=T,col="grey85")
+    plot(JA_Northern_Shark,ylim=c(-39,-11),xlim=c(108,130),add=T,col="grey40")
+    plot(WA_Northern_Shark_2,add=T,col=1,angle=0,density=seq(5,35,2))
+    plot(WA_Northern_Shark_2,add=T,col=1,angle=90,density=seq(5,35,2))
+    plot(WCDGDLL,add=T,col="grey70")
+    plot(SDGDLL_zone1,add=T,col="white")
+    plot(SDGDLL_zone2,add=T,col="grey55")
+    
+    lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="black")
+    points(meanFL$LONG,meanFL$LAT-0.5,cex=meanFL$FL/150,pch=19,col=1)
+    
+    text(109,-14,paste("N=",nrow(dat),sep=""),cex=.8,pos=4)
+    axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
+    axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.065)
+    axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
+    axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.065)  
+    
+    box() 
+    
+  }
+  
+  tiff("Figure 1.tiff",width = 1100, height = 1900,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(0.1,.15,0.125,.05),oma=c(2.25,2,0.1,0.05),las=1,mgp=c(1,.55,0))
+  for(i in 1:length(Output.GLM))
+  {
+    fn.show.spatial.FL(Output.GLM[[i]]$data,Store.preds[[i]],'obs')
+    
+    if(names(Output.GLM)[i]=="BT")mtext(Species.labels.Scientific[i],3,cex=0.6)
+    if(!names(Output.GLM)[i]=="BT")mtext(Species.labels.Scientific[i],3,cex=0.7)
+    if(i%in%c(1:4))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.15,las=2,tck=-0.08)
+    if(i%in%c(4,8,12)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.15,tck=-0.08)
+    
+    if(i==1)
+    {
+      legend(111,-21,"Western",bty='n',cex=1.25)
+      legend(111,-24,"Australia",bty='n',cex=1.25)
+    }
+    
+    # add size reference
+    if(i==9)
+    {
+      points(rep(117,3),c(-23,-26,-29),cex=c(100,200,300)/150,pch=19,col=1)
+      text(rep(117,3),c(-23,-26,-29),c("100 cm","200 cm","300 cm"),pos=4)
+    }
+    
+    # add zone reference
+    if(i==11)
+    {
+      PoSi=seq(-32.25,-21.5,length.out=6)
+      Zn.leg=rev(c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2"))
+      Zn.col=rev(c("grey40","grey85",NA,"grey70","white","grey55"))
+      pCH=rev(c(22,22,12,22,22,22))
+      for(t in 1:length(Zn.leg))
+      {
+        points(117,PoSi[t],pch=pCH[t],bg=Zn.col[t],cex=1.35)
+        text(117,PoSi[t],Zn.leg[t],pos=4,cex=0.9)
+      }
+    }
+  }
+  
+  mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
+  mtext("Latitude (?S)",side=2,line=0.725,font=1,las=0,cex=1.15,outer=T)
+  dev.off()
+  
+  
+  
+  #coefs
+  fn.plot.coef=function(Mod,dat,what)
+  {
+    all.coef=summary(Mod)$coefficients
+    id=grep(what,row.names(all.coef))
+    
+    if(length(id)>0)
+    {
+      x=1:length(c(0,all.coef[id,1]))
+      y=c(0,all.coef[id,1])
+      CI=2*c(0,all.coef[id,2])
+      YLIM=c(min(y-CI)*1.25,max(y+CI)*1.25)
+      plot(x,y,ylab="",xlab="",xaxt='n',ylim=YLIM,pch=19)
+      segments(x,y-CI,x,y+CI)
+      axis(1,x,dat)
+    }
+    
+  }
+  
+  tiff("Coef_Zone_FL.tiff",width = 1500, height = 2000,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(0.2,.3,0.18,.1),oma=c(2.25,2,0.15,0.1),las=1,mgp=c(1,.5,0))
+  
+  for(i in 1:length(Output.GLM))
+  {
+    fn.plot.coef(Output.GLM[[i]]$model,levels(Output.GLM[[i]]$data$zone),"zone")
+    mtext(Species.labels[i],3,cex=0.9)
+    
+  }
+  mtext("Zone",1,line=1,outer=T,cex=1.5)
+  mtext("Coefficient",2,line=0,outer=T,las=3,cex=1.5)
+  dev.off()
+  
+  
   #show variability in data
-fn.show.spatial.FL.depth_obs=function(dat,sP)
-{
-  dat=subset(dat,!is.na(BOTDEPTH) & BOTDEPTH<300 & BOTDEPTH>0)
-  dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
+  Zone.names=Zone.order
+  names(Zone.names)=c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2")
   
-  boxplot(FL~BOTDEPTH.bin,dat,main="",col='grey80')
-  mtext(sP,3,line=0,cex=1.1)
-}
-
-tiff("Figure S2.tiff",width = 2000, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(.2,0.2,.175,.04),oma=c(2,1.5,.2,.01),mgp=c(1,.4,0),las=1)
-for(i in 1:length(This.sp))fn.show.spatial.FL.depth_obs(Output.GLM[[i]]$data,Species.labels.Scientific[i])
-mtext("Fork length (cm)",2,line=0.15,las=3,cex=1.25,outer=T)
-mtext("Depth (m)",1,line=0.5,cex=1.25,outer=T)
-dev.off() 
-
-CI.approach="NO"
-if(CI.approach=="YES")
-{
-  fn.show.spatial.FL.depth=function(dat,pred,WHAT)
+  fn.show.spatial.FL_obs=function(dat,sP)
+  {
+    #NMs=names(Zone.names[match(levels(dat$zone),Zone.names)])
+    NMs=levels(dat$zone)
+    boxplot(FL~zone,dat,main="",col='grey80',names=NMs,cex.axis=.9)
+    mtext(sP,3,line=0,cex=1.1)
+  }
+  
+  tiff("Figure S1.tiff",width = 2400, height = 2000,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(.2,0.2,.175,.04),oma=c(2,1.5,.2,.01),mgp=c(1,.4,0),las=1)
+  for(i in 1:length(This.sp))fn.show.spatial.FL_obs(Output.GLM[[i]]$data,Species.labels.Scientific[i])
+  mtext("Fork length (cm)",2,line=0.15,las=3,cex=1.25,outer=T)
+  mtext("Zone",1,line=0.5,cex=1.25,outer=T)
+  dev.off() 
+  
+  
+  #2.5 Show Depth effects
+  
+  #show variability in data
+  fn.show.spatial.FL.depth_obs=function(dat,sP)
   {
     dat=subset(dat,!is.na(BOTDEPTH) & BOTDEPTH<300 & BOTDEPTH>0)
     dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
     
-    #Observations
-    if(WHAT=="obs") meanFL=aggregate(FL~BOTDEPTH.bin,dat,mean) #plot observations
-    if(WHAT=="preds") meanFL=aggregate(FL~BOTDEPTH.bin,pred,mean)  #plot predictions
-    
-    x=as.numeric(as.character(meanFL$BOTDEPTH.bin))
-    y=meanFL$FL
-    
-    Unic=as.character(sort(unique(meanFL$BOTDEPTH.bin)))
-    CI=data.frame(Low=rep(NA,length(Unic)),UP=NA)
-    sub=function(d)quantile(d$FL,c(0.025,0.975),na.rm=T)
-    for (t in 1:length(Unic))CI[t,]=sub(subset(dat,BOTDEPTH.bin==Unic[t]))
-    Ymax=max(CI)*1.2
-    plot(x,y,ylim=c(0,Ymax),xlim=c(0,max(dat$BOTDEPTH)*1.1),ylab="",xlab="",xaxt='n',yaxt='n',pch=19,col=1)
-    segments(x,CI$Low,x,CI$UP)
-    axis(2,seq(0,Ymax,50),seq(0,Ymax,50),cex.axis=1.25)
-    axis(1,seq(0,300,50),seq(0,300,50),cex.axis=1.25)
-    axis(2,seq(0,Ymax,10),F,tck=-0.02)
-    axis(1,seq(0,300,10),F,tck=-0.02)
+    boxplot(FL~BOTDEPTH.bin,dat,main="",col='grey80')
+    mtext(sP,3,line=0,cex=1.1)
+  }
+  
+  tiff("Figure S2.tiff",width = 2000, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(.2,0.2,.175,.04),oma=c(2,1.5,.2,.01),mgp=c(1,.4,0),las=1)
+  for(i in 1:length(This.sp))fn.show.spatial.FL.depth_obs(Output.GLM[[i]]$data,Species.labels.Scientific[i])
+  mtext("Fork length (cm)",2,line=0.15,las=3,cex=1.25,outer=T)
+  mtext("Depth (m)",1,line=0.5,cex=1.25,outer=T)
+  dev.off() 
+  
+  CI.approach="NO"
+  if(CI.approach=="YES")
+  {
+    fn.show.spatial.FL.depth=function(dat,pred,WHAT)
+    {
+      dat=subset(dat,!is.na(BOTDEPTH) & BOTDEPTH<300 & BOTDEPTH>0)
+      dat$BOTDEPTH.bin=as.factor(round(dat$BOTDEPTH/10)*10)
+      
+      #Observations
+      if(WHAT=="obs") meanFL=aggregate(FL~BOTDEPTH.bin,dat,mean) #plot observations
+      if(WHAT=="preds") meanFL=aggregate(FL~BOTDEPTH.bin,pred,mean)  #plot predictions
+      
+      x=as.numeric(as.character(meanFL$BOTDEPTH.bin))
+      y=meanFL$FL
+      
+      Unic=as.character(sort(unique(meanFL$BOTDEPTH.bin)))
+      CI=data.frame(Low=rep(NA,length(Unic)),UP=NA)
+      sub=function(d)quantile(d$FL,c(0.025,0.975),na.rm=T)
+      for (t in 1:length(Unic))CI[t,]=sub(subset(dat,BOTDEPTH.bin==Unic[t]))
+      Ymax=max(CI)*1.2
+      plot(x,y,ylim=c(0,Ymax),xlim=c(0,max(dat$BOTDEPTH)*1.1),ylab="",xlab="",xaxt='n',yaxt='n',pch=19,col=1)
+      segments(x,CI$Low,x,CI$UP)
+      axis(2,seq(0,Ymax,50),seq(0,Ymax,50),cex.axis=1.25)
+      axis(1,seq(0,300,50),seq(0,300,50),cex.axis=1.25)
+      axis(2,seq(0,Ymax,10),F,tck=-0.02)
+      axis(1,seq(0,300,10),F,tck=-0.02)
+      
+    }
+    tiff("Figure S2.tiff",width = 2000, height = 2400,units = "px", res = 300,compression = "lzw")
+    par(mfcol=c(5,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
+    for(i in 1:length(Output.GLM))
+    {
+      fn.show.spatial.FL.depth(Output.GLM[[i]]$data,Store.preds[[i]],'obs')
+      mtext(Species.labels.Scientific[i],3,line=0,cex=1.1)
+    }
+    mtext("Fork length (cm)",2,line=0.45,las=3,cex=1.25,outer=T)
+    mtext("Depth (m)",1,line=0.5,cex=1.25,outer=T)
+    dev.off()
     
   }
-  tiff("Figure S2.tiff",width = 2000, height = 2400,units = "px", res = 300,compression = "lzw")
-  par(mfcol=c(5,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
+  
+  
+  #coefs
+  tiff("Coef_Depth_FL.tiff",width = 1500, height = 2000,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(4,3),mai=c(0.2,.3,0.18,.1),oma=c(2.25,2,0.15,0.1),las=1,mgp=c(1,.5,0))
+  
   for(i in 1:length(Output.GLM))
   {
-    fn.show.spatial.FL.depth(Output.GLM[[i]]$data,Store.preds[[i]],'obs')
-    mtext(Species.labels.Scientific[i],3,line=0,cex=1.1)
+    fn.plot.coef(Output.GLM[[i]]$model,levels(Output.GLM[[i]]$data$BOTDEPTH.bin),"BOTDEPTH.bin")
+    mtext(Species.labels[i],3,cex=0.9)
+    
   }
-  mtext("Fork length (cm)",2,line=0.45,las=3,cex=1.25,outer=T)
-  mtext("Depth (m)",1,line=0.5,cex=1.25,outer=T)
+  mtext("Depth (m)",1,line=1,outer=T,cex=1.5)
+  mtext("Coefficient",2,line=0,outer=T,las=3,cex=1.5)
   dev.off()
   
-}
-
-
-  #coefs
-tiff("Coef_Depth_FL.tiff",width = 1500, height = 2000,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(4,3),mai=c(0.2,.3,0.18,.1),oma=c(2.25,2,0.15,0.1),las=1,mgp=c(1,.5,0))
-
-for(i in 1:length(Output.GLM))
-{
-  fn.plot.coef(Output.GLM[[i]]$model,levels(Output.GLM[[i]]$data$BOTDEPTH.bin),"BOTDEPTH.bin")
-  mtext(Species.labels[i],3,cex=0.9)
   
-}
-mtext("Depth (m)",1,line=1,outer=T,cex=1.5)
-mtext("Coefficient",2,line=0,outer=T,las=3,cex=1.5)
-dev.off()
-
-
-
-
-
-#3. Spatial patterns in sex ratio
-
-#3.1 Prelim analyses
-
-#Select species for analysis (at least 100 observations overall, & > 10 observation in at least 2 zones)
-This.sp=names(Table.species)
-Selected=vector('list',length(This.sp))
-names(Selected)=This.sp
-for(i in 1:length(This.sp))Selected[[i]]=Select.fn(subset(DATA,SPECIES==This.sp[[i]] & year<=Current.year & SEX%in%c("M","F") & !(is.na(BLOCK) | BLOCK==0 )))
-ID=which(Selected=="YES")
-
-This.sp=names(ID)
-
-#sort species by importance
-a=subset(DATA,SPECIES%in%This.sp)
-SP.sort=rev(sort(table(a$SPECIES)))
-rm(a)
-This.sp=This.sp[match(names(SP.sort),This.sp)]
-
-Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark","Smooth hammerhead",
-                 "Spinner shark","Spot-tail shark","Milk shark","Blacktip sharks","Tiger shark",
-                 "Western Wobbegong","Pencil Shark","Banded Wobbegong","Scalloped Hammerhead")
-
-Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
-
-names(This.sp)=Species.labels
-Species.Scient=c("C. obscurus","C. plumbeus","M. antarcticus","F. macki",
-                 "S. zygaena","C. brevipinna","C. sorrah","R. acutus","C. limbatus & C. tilstoni",
-                 "G. cuvier","Orectolobus sp.","H. hyugaensis","Orectolobus ornatus","S. lewini")
-names(Species.Scient)=This.sp
-
-Species.labels.Scientific=c(expression(italic("C. obscurus")),expression(italic("C. plumbeus")),
-                            expression(italic("M. antarcticus")),expression(italic("F. macki")),
-                            expression(italic("S. zygaena")),expression(italic("C. brevipinna")),
-                            expression(italic("C. sorrah")),expression(italic("R. acutus")),
-                            expression(italic("C. limbatus & C. tilstoni")),expression(italic("G. cuvier")),
-                            expression(italic("Orectolobus sp.")),expression(italic("H. hyugaensis")),
-                            expression(italic("O. ornatus")),expression(italic("S. lewini")))
-
-
-Small.scale.sex=function(dat,sP)
-{
-  dat=subset(dat,!SEX=="U")
-  dat$Month=as.factor(dat$Month)
-  dat$SEX=as.factor(dat$SEX)
-  Ag=aggregate(Number~Month+SEX,dat,sum)
-  wide <- reshape(Ag, v.names = "Number", idvar = "Month",
-                  timevar = "SEX", direction = "wide")
-  wide$Number.M=with(wide,ifelse(is.na(Number.M),0,Number.M))
-  wide$prop=(wide$Number.M)/(wide$Number.F+wide$Number.M)
-  # plot(wide$prop,ylim=c(0,1),xlim=c(1,12),type='h',main=sP,cex.main=1.25,ylab="",xlab="",lwd=4)
-  plot(wide$prop,ylim=c(0,1),xlim=c(1,12),type='h',ylab="",xlab="",lwd=2.5)
-  abline(h=0.5,lty=2,col="grey50")
-  #legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
-  mtext(sP,3,line=0,cex=1.1)
-  box()
-}
-
-tiff("Figure S6.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(5,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
-
-for(i in 1:length(This.sp))Small.scale.sex(subset(DATA,SPECIES==This.sp[[i]]  &
-                                                    !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
-mtext("Proportion of males",2,line=0.25,las=3,cex=1.25,outer=T)
-mtext("Month",1,line=0.5,cex=1.25,outer=T)
-dev.off() 
-
-
-#Colinearity
-if(Use.Lat.Long=="YES") for(i in 1:length(This.sp))fn.colinearity(subset(DATA,SPECIES==This.sp[i] & SEX%in%c("M","F")))
-
-  #3.2. Run GLM
-if(Use.Lat.Long=="YES")
-{
-  simpler.model=match(c("LG","BT","MI","PE","SO","TG"),This.sp)
-  fn.sex=function(dat)
+  
+  #3. Spatial patterns in sex ratio
+  
+  #3.1 Prelim analyses
+  
+  #Select species for analysis (at least 100 observations overall, & > 10 observation in at least 2 zones)
+  This.sp=names(Table.species)
+  Selected=vector('list',length(This.sp))
+  names(Selected)=This.sp
+  for(i in 1:length(This.sp))Selected[[i]]=Select.fn(subset(DATA,SPECIES==This.sp[[i]] & year<=Current.year & SEX%in%c("M","F") & !(is.na(BLOCK) | BLOCK==0 )))
+  ID=which(Selected=="YES")
+  
+  This.sp=names(ID)
+  
+  #sort species by importance
+  a=subset(DATA,SPECIES%in%This.sp)
+  SP.sort=rev(sort(table(a$SPECIES)))
+  rm(a)
+  This.sp=This.sp[match(names(SP.sort),This.sp)]
+  
+  Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark","Smooth hammerhead",
+                   "Spinner shark","Spot-tail shark","Milk shark","Blacktip sharks","Tiger shark",
+                   "Western Wobbegong","Pencil Shark","Banded Wobbegong","Scalloped Hammerhead")
+  
+  Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
+  
+  names(This.sp)=Species.labels
+  Species.Scient=c("C. obscurus","C. plumbeus","M. antarcticus","F. macki",
+                   "S. zygaena","C. brevipinna","C. sorrah","R. acutus","C. limbatus & C. tilstoni",
+                   "G. cuvier","Orectolobus sp.","H. hyugaensis","Orectolobus ornatus","S. lewini")
+  names(Species.Scient)=This.sp
+  
+  Species.labels.Scientific=c(expression(italic("C. obscurus")),expression(italic("C. plumbeus")),
+                              expression(italic("M. antarcticus")),expression(italic("F. macki")),
+                              expression(italic("S. zygaena")),expression(italic("C. brevipinna")),
+                              expression(italic("C. sorrah")),expression(italic("R. acutus")),
+                              expression(italic("C. limbatus & C. tilstoni")),expression(italic("G. cuvier")),
+                              expression(italic("Orectolobus sp.")),expression(italic("H. hyugaensis")),
+                              expression(italic("O. ornatus")),expression(italic("S. lewini")))
+  
+  
+  Small.scale.sex=function(dat,sP)
   {
-    dat$Number=1
-    dat$BOTDEPTH.bin=round(dat$BOTDEPTH/10)*10
-    
-    #remove lat-long combos with less than 10 observations
-    dat$PASTED=paste(dat$LAT,dat$LONG)
-    These.Lats.Longs=table(dat$PASTED)
-    These.Lats.Longs=These.Lats.Longs[These.Lats.Longs>10]
-    dat=subset(dat,PASTED%in%names(These.Lats.Longs))
-    
-    #get number of males and females
-    if(!i%in%simpler.model)
-    {
-      agg.Male=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
-      names(agg.Male)[4]="N.male"
-      agg.Fem=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
-      names(agg.Fem)[4]="N.female"
-      agg.sex=merge(agg.Male,agg.Fem,by=c("LONG","LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
-      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-      agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
-      agg.sex=subset(agg.sex,Sum>4)
-      
-      #put as factor
-      agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
-      agg.sex$LONG=as.factor(agg.sex$LONG)
-      agg.sex$LAT=as.factor(agg.sex$LAT)
-      
-      #model
-      model<- glm(cbind(N.male,N.female)~LAT+LONG+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
-    }
-    
-    if(i%in%simpler.model)
-    {
-      agg.Male=aggregate(Number~LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
-      names(agg.Male)[3]="N.male"
-      agg.Fem=aggregate(Number~LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
-      names(agg.Fem)[3]="N.female"
-      agg.sex=merge(agg.Male,agg.Fem,by=c("LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
-      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-      agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
-      agg.sex=subset(agg.sex,Sum>4)
-      
-      #put as factor
-      agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
-      agg.sex$LAT=as.factor(agg.sex$LAT)
-      
-      #model
-      model<- glm(cbind(N.male,N.female)~LAT+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
-    }
-    
-    #Anova
-    Signifcance1=anova(model,test="Chisq")
-    
-    #Deviance explained
-    Dev.exp=Dsquared(model,adjust=F)$d3
-    
-    return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
+    dat=subset(dat,!SEX=="U")
+    dat$Month=as.factor(dat$Month)
+    dat$SEX=as.factor(dat$SEX)
+    Ag=aggregate(Number~Month+SEX,dat,sum)
+    wide <- reshape(Ag, v.names = "Number", idvar = "Month",
+                    timevar = "SEX", direction = "wide")
+    wide$Number.M=with(wide,ifelse(is.na(Number.M),0,Number.M))
+    wide$prop=(wide$Number.M)/(wide$Number.F+wide$Number.M)
+    # plot(wide$prop,ylim=c(0,1),xlim=c(1,12),type='h',main=sP,cex.main=1.25,ylab="",xlab="",lwd=4)
+    plot(wide$prop,ylim=c(0,1),xlim=c(1,12),type='h',ylab="",xlab="",lwd=2.5)
+    abline(h=0.5,lty=2,col="grey50")
+    #legend("topleft",sP,bty='n',cex=1.35,adj=c(0.1,0))
+    mtext(sP,3,line=0,cex=1.1)
+    box()
   }
-}
-
-if(Use.Lat.Long=="NO")
-{
-  fn.sex=function(dat,depth.bin)
-  {
-    dat=subset(dat,BOTDEPTH<=250 & !is.na(zone))
-    dat$Number=1
-    dat$BOTDEPTH.bin=round(dat$BOTDEPTH/depth.bin)*depth.bin
   
-    agg.Male=aggregate(Number~zone+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
-    names(agg.Male)[match("Number",names(agg.Male))]="N.male"
-    agg.Fem=aggregate(Number~zone+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
-    names(agg.Fem)[match("Number",names(agg.Fem))]="N.female"
-    agg.sex=merge(agg.Male,agg.Fem,by=c("zone","BOTDEPTH.bin"),all.x=T,all.y=T)
+  tiff("Figure S6.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(5,3),mai=c(.2,0.25,.175,.1),oma=c(2,2,.2,.1),mgp=c(1,.5,0),las=1)
+  
+  for(i in 1:length(This.sp))Small.scale.sex(subset(DATA,SPECIES==This.sp[[i]]  &
+                                                      !(is.na(BLOCK) | BLOCK==0 )),Species.labels.Scientific[i])
+  mtext("Proportion of males",2,line=0.25,las=3,cex=1.25,outer=T)
+  mtext("Month",1,line=0.5,cex=1.25,outer=T)
+  dev.off() 
+  
+  
+  #Colinearity
+  if(Use.Lat.Long=="YES") for(i in 1:length(This.sp))fn.colinearity(subset(DATA,SPECIES==This.sp[i] & SEX%in%c("M","F")))
+  
+  #3.2. Run GLM
+  if(Use.Lat.Long=="YES")
+  {
+    simpler.model=match(c("LG","BT","MI","PE","SO","TG"),This.sp)
+    fn.sex=function(dat)
+    {
+      dat$Number=1
+      dat$BOTDEPTH.bin=round(dat$BOTDEPTH/10)*10
+      
+      #remove lat-long combos with less than 10 observations
+      dat$PASTED=paste(dat$LAT,dat$LONG)
+      These.Lats.Longs=table(dat$PASTED)
+      These.Lats.Longs=These.Lats.Longs[These.Lats.Longs>10]
+      dat=subset(dat,PASTED%in%names(These.Lats.Longs))
+      
+      #get number of males and females
+      if(!i%in%simpler.model)
+      {
+        agg.Male=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
+        names(agg.Male)[4]="N.male"
+        agg.Fem=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
+        names(agg.Fem)[4]="N.female"
+        agg.sex=merge(agg.Male,agg.Fem,by=c("LONG","LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
+        agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+        agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+        agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
+        agg.sex=subset(agg.sex,Sum>4)
+        
+        #put as factor
+        agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
+        agg.sex$LONG=as.factor(agg.sex$LONG)
+        agg.sex$LAT=as.factor(agg.sex$LAT)
+        
+        #model
+        model<- glm(cbind(N.male,N.female)~LAT+LONG+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
+      }
+      
+      if(i%in%simpler.model)
+      {
+        agg.Male=aggregate(Number~LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
+        names(agg.Male)[3]="N.male"
+        agg.Fem=aggregate(Number~LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
+        names(agg.Fem)[3]="N.female"
+        agg.sex=merge(agg.Male,agg.Fem,by=c("LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
+        agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+        agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+        agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
+        agg.sex=subset(agg.sex,Sum>4)
+        
+        #put as factor
+        agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
+        agg.sex$LAT=as.factor(agg.sex$LAT)
+        
+        #model
+        model<- glm(cbind(N.male,N.female)~LAT+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
+      }
+      
+      #Anova
+      Signifcance1=anova(model,test="Chisq")
+      
+      #Deviance explained
+      Dev.exp=Dsquared(model,adjust=F)$d3
+      
+      return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model)) 
+    }
+  }
+  
+  if(Use.Lat.Long=="NO")
+  {
+    fn.sex=function(dat,depth.bin)
+    {
+      dat=subset(dat,BOTDEPTH<=250 & !is.na(zone))
+      dat$Number=1
+      dat$BOTDEPTH.bin=round(dat$BOTDEPTH/depth.bin)*depth.bin
+      
+      agg.Male=aggregate(Number~zone+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
+      names(agg.Male)[match("Number",names(agg.Male))]="N.male"
+      agg.Fem=aggregate(Number~zone+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
+      names(agg.Fem)[match("Number",names(agg.Fem))]="N.female"
+      agg.sex=merge(agg.Male,agg.Fem,by=c("zone","BOTDEPTH.bin"),all.x=T,all.y=T)
+      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+      agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
+      agg.sex=subset(agg.sex,Sum>4)
+      
+      #put as factor
+      agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
+      agg.sex$zone=factor(agg.sex$zone)
+      
+      
+      #model
+      model<- glm(cbind(N.male,N.female)~zone+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
+      
+      #Anova
+      Signifcance1=anova(model,test="Chisq")
+      
+      #Deviance explained
+      Dev.exp=Dsquared(model,adjust=F)$d3
+      
+      return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model))     
+    }
+  }
+  
+  Output.GLM.sex=vector('list',length(This.sp))
+  names(Output.GLM.sex)=This.sp
+  
+  for(i in 1:length(Output.GLM.sex))Output.GLM.sex[[i]]=fn.sex(subset(DATA,SPECIES==This.sp[i] & BOTDEPTH>0 & SEX%in%c("M","F")),10)
+  
+  
+  #Get term significance 
+  ColNam=c("Species","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot")
+  Term.Mat=matrix(nrow=length(Output.GLM.sex),ncol=length(ColNam))
+  colnames(Term.Mat)=ColNam
+  Term.Mat=as.data.frame(Term.Mat)
+  
+  for(i in 1:length(Output.GLM.sex))
+  {
+    Term.Mat$Species[i]=names(Output.GLM.sex)[i]
+    Anov=round(Output.GLM.sex[[i]]$Anova$"Pr(>Chi)",3)
+    Term.Mat$P_Zone[i]=Anov[2]
+    Term.Mat$P_Depth[i]=Anov[3]  
+    Dev=round(fn.dev.exp.term(Output.GLM.sex[[i]]))
+    Term.Mat$Dev.exp_Zone[i]=Dev[1]
+    Term.Mat$Dev.exp_Depth[i]=Dev[2]
+    Term.Mat$Dev.exp_Tot[i]=Dev[1]+Dev[2]
+  }
+  Term.Mat$P_Zone=ifelse(Term.Mat$P_Zone==0,'<0.001',Term.Mat$P_Zone)
+  Term.Mat$P_Depth=ifelse(Term.Mat$P_Depth==0,'<0.001',Term.Mat$P_Depth)
+  
+  Term.Mat=merge(Term.Mat,data.frame(Scientific=Species.Scient,Species=names(Species.Scient)),by="Species")
+  Term.Mat=Term.Mat[ match(This.sp,Term.Mat$Species),]
+  Term.Mat=Term.Mat[,match(c("Scientific","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot"),names(Term.Mat))]
+  names(Term.Mat)[1]="Species"
+  Model.tbl(WD=getwd(),Tbl=Term.Mat,Doc.nm="Model Sex",caption=NA,paragph=NA,
+            HdR.col='black',HdR.bg='white',Hdr.fnt.sze=12,Hdr.bld='normal',body.fnt.sze=12,
+            Grid.col='black',Fnt.hdr= "Arial",Fnt.body= "Arial",
+            HDR.names=c('Species','P','Deviance explained (%)'),
+            HDR.span=c(1,2,3),HDR.2nd=c("","Zone","Depth","Zone","Depth","total"))
+  
+  
+  #3.3. Show Latitude and longitude effect
+  Zone.mid.point="NO"   #show only mid point of zone instead of by block
+  #Zone.mid.point="YES"  
+  fn.show.spatial.sex=function(dat)
+  {
+    Rad=0.7
+    if(Zone.mid.point=="YES")
+    {
+      dat=merge(dat,Zone.mids,by="zone",all.x=T)
+      dat$LAT=dat$Zone.mid.Lat
+      dat$LONG=dat$Zone.mid.Long
+      Rad=1.75
+    }
+    agg.Male=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[4]="N.male"
+    agg.Fem=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[4]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("LONG","LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
     agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
     agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
     agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
     agg.sex=subset(agg.sex,Sum>4)
     
-    #put as factor
-    agg.sex$BOTDEPTH.bin=as.factor(agg.sex$BOTDEPTH)
-    agg.sex$zone=factor(agg.sex$zone)
+    agg.sex$LONG=as.numeric(as.character(agg.sex$LONG))
+    agg.sex$LAT=as.numeric(as.character(agg.sex$LAT))
     
-   
-    #model
-    model<- glm(cbind(N.male,N.female)~zone+BOTDEPTH.bin, data=agg.sex, family="binomial", maxit=500)
+    #Observations  
+    plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
+            plt = NULL,col="grey80",tck = 0.025, tckMinor = 0.0125,
+            xlab="",ylab="",axes=F)
+    lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="black")
     
-       #Anova
-    Signifcance1=anova(model,test="Chisq")
+    #add zones
+    plot(WA_Northern_Shark,add=T,col="grey85")
+    plot(JA_Northern_Shark,ylim=c(-39,-11),xlim=c(108,130),add=T,col="grey40")
+    plot(WA_Northern_Shark_2,add=T,col=1,angle=0,density=seq(5,35,2))
+    plot(WA_Northern_Shark_2,add=T,col=1,angle=90,density=seq(5,35,2))
+    plot(WCDGDLL,add=T,col="grey70")
+    plot(SDGDLL_zone1,add=T,col="white")
+    plot(SDGDLL_zone2,add=T,col="grey55")
     
-    #Deviance explained
-    Dev.exp=Dsquared(model,adjust=F)$d3
     
-    return(list(Anova=Signifcance1,Dev.exp=Dev.exp,data=dat,model=model))     
-  }
-}
-
-Output.GLM.sex=vector('list',length(This.sp))
-names(Output.GLM.sex)=This.sp
-
-for(i in 1:length(Output.GLM.sex))Output.GLM.sex[[i]]=fn.sex(subset(DATA,SPECIES==This.sp[i] & BOTDEPTH>0 & SEX%in%c("M","F")),10)
-
-
-#Get term significance 
-ColNam=c("Species","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot")
-Term.Mat=matrix(nrow=length(Output.GLM.sex),ncol=length(ColNam))
-colnames(Term.Mat)=ColNam
-Term.Mat=as.data.frame(Term.Mat)
-
-for(i in 1:length(Output.GLM.sex))
-{
-  Term.Mat$Species[i]=names(Output.GLM.sex)[i]
-  Anov=round(Output.GLM.sex[[i]]$Anova$"Pr(>Chi)",3)
-  Term.Mat$P_Zone[i]=Anov[2]
-  Term.Mat$P_Depth[i]=Anov[3]  
-  Dev=round(fn.dev.exp.term(Output.GLM.sex[[i]]))
-  Term.Mat$Dev.exp_Zone[i]=Dev[1]
-  Term.Mat$Dev.exp_Depth[i]=Dev[2]
-  Term.Mat$Dev.exp_Tot[i]=Dev[1]+Dev[2]
-}
-Term.Mat$P_Zone=ifelse(Term.Mat$P_Zone==0,'<0.001',Term.Mat$P_Zone)
-Term.Mat$P_Depth=ifelse(Term.Mat$P_Depth==0,'<0.001',Term.Mat$P_Depth)
-
-Term.Mat=merge(Term.Mat,data.frame(Scientific=Species.Scient,Species=names(Species.Scient)),by="Species")
-Term.Mat=Term.Mat[ match(This.sp,Term.Mat$Species),]
-Term.Mat=Term.Mat[,match(c("Scientific","P_Zone","P_Depth","Dev.exp_Zone","Dev.exp_Depth","Dev.exp_Tot"),names(Term.Mat))]
-names(Term.Mat)[1]="Species"
-Model.tbl(WD=getwd(),Tbl=Term.Mat,Doc.nm="Model Sex",caption=NA,paragph=NA,
-          HdR.col='black',HdR.bg='white',Hdr.fnt.sze=12,Hdr.bld='normal',body.fnt.sze=12,
-          Grid.col='black',Fnt.hdr= "Arial",Fnt.body= "Arial",
-          HDR.names=c('Species','P','Deviance explained (%)'),
-          HDR.span=c(1,2,3),HDR.2nd=c("","Zone","Depth","Zone","Depth","total"))
-
-
-#3.3. Show Latitude and longitude effect
-Zone.mid.point="NO"   #show only mid point of zone instead of by block
-#Zone.mid.point="YES"  
-fn.show.spatial.sex=function(dat)
-{
-  Rad=0.7
-  if(Zone.mid.point=="YES")
+    for(j in 1:nrow(agg.sex))
+    {
+      floating.pie(agg.sex$LONG[j],agg.sex$LAT[j]-1,c(agg.sex$N.male[j]+.1,agg.sex$N.female[j]+.1),
+                   radius=Rad,col=c("white","black"))
+    }
+    axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
+    axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.08)
+    axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
+    axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.08)
+    
+    text(109,-14,paste("N=",nrow(dat),sep=""),cex=.75,pos=4)
+    box() 
+  } 
+  
+  tiff("Figure 2.tiff",width = 950, height = 2000,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(5,3),mai=c(0.1,.1,0.18,.01),oma=c(2.25,2,0.15,0.01),las=1,mgp=c(1,.5,0))
+  for(i in 1:length(Output.GLM.sex))
   {
-    dat=merge(dat,Zone.mids,by="zone",all.x=T)
-    dat$LAT=dat$Zone.mid.Lat
-    dat$LONG=dat$Zone.mid.Long
-    Rad=1.75
-  }
-  agg.Male=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[4]="N.male"
-  agg.Fem=aggregate(Number~LONG+LAT+BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[4]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("LONG","LAT","BOTDEPTH.bin"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
-  agg.sex=subset(agg.sex,Sum>4)
-  
-  agg.sex$LONG=as.numeric(as.character(agg.sex$LONG))
-  agg.sex$LAT=as.numeric(as.character(agg.sex$LAT))
-  
-  #Observations  
-  plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
-          plt = NULL,col="grey80",tck = 0.025, tckMinor = 0.0125,
-          xlab="",ylab="",axes=F)
-  lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="black")
-  
-  #add zones
-  plot(WA_Northern_Shark,add=T,col="grey85")
-  plot(JA_Northern_Shark,ylim=c(-39,-11),xlim=c(108,130),add=T,col="grey40")
-  plot(WA_Northern_Shark_2,add=T,col=1,angle=0,density=seq(5,35,2))
-  plot(WA_Northern_Shark_2,add=T,col=1,angle=90,density=seq(5,35,2))
-  plot(WCDGDLL,add=T,col="grey70")
-  plot(SDGDLL_zone1,add=T,col="white")
-  plot(SDGDLL_zone2,add=T,col="grey55")
-  
-  
-  for(j in 1:nrow(agg.sex))
-  {
-    floating.pie(agg.sex$LONG[j],agg.sex$LAT[j]-1,c(agg.sex$N.male[j]+.1,agg.sex$N.female[j]+.1),
-                 radius=Rad,col=c("white","black"))
-  }
-  axis(2,seq(YAXIS[1],YAXIS[2],1),F,tck=-0.03)
-  axis(2,seq(YAXIS[1],YAXIS[2],4),F,tck=-0.08)
-  axis(1,seq(XAXIS[1],XAXIS[2],1),F,tck=-0.03)
-  axis(1,seq(XAXIS[1],XAXIS[2],4),F,tck=-0.08)
-  
-  text(109,-14,paste("N=",nrow(dat),sep=""),cex=.75,pos=4)
-  box() 
-} 
-
-tiff("Figure 2.tiff",width = 950, height = 2000,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(5,3),mai=c(0.1,.1,0.18,.01),oma=c(2.25,2,0.15,0.01),las=1,mgp=c(1,.5,0))
-for(i in 1:length(Output.GLM.sex))
-{
-  fn.show.spatial.sex(Output.GLM.sex[[i]]$data)
-  
-  mtext(Species.labels.Scientific[i],3,cex=0.75)
-  if(i%in%c(1:5))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.15,las=2,tck=-0.08)
-  if(i%in%c(5,10,14)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.15,tck=-0.08)
-  
-  if(i==1)
-  {
-    legend(111,-20,"Western",bty='n',cex=1)
-    legend(111,-23,"Australia",bty='n',cex=1)
+    fn.show.spatial.sex(Output.GLM.sex[[i]]$data)
+    
+    mtext(Species.labels.Scientific[i],3,cex=0.75)
+    if(i%in%c(1:5))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.15,las=2,tck=-0.08)
+    if(i%in%c(5,10,14)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.15,tck=-0.08)
+    
+    if(i==1)
+    {
+      legend(111,-20,"Western",bty='n',cex=1)
+      legend(111,-23,"Australia",bty='n',cex=1)
+    }
+    
   }
   
-}
-
-#add scale
-plot(1:10,col="transparent",xaxt='n',yaxt='n',ann=F)
-Zn.leg=rev(c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2"))
-Zn.col=rev(c("grey40","grey85",NA,"grey70","white","grey55"))
-pCH=rev(c(22,22,12,22,22,22))
-for(t in 1:length(Zn.leg))
-{
-  points(2,3.5+t,pch=pCH[t],bg=Zn.col[t],cex=1.85)
-  text(2.25,3.5+t,Zn.leg[t],pos=4,cex=0.9)
-}
-box(col="white")
-
-mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
-mtext("Latitude (?S)",side=2,line=0.55,font=1,las=0,cex=1.15,outer=T)
-dev.off()
-
-
-
-
-#3.4. Depth
-fn.show.spatial.sex.depth=function(dat,sP)
-{
-  agg.Male=aggregate(Number~BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("BOTDEPTH.bin"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
-  agg.sex=subset(agg.sex,Sum>4)
-  agg.sex=agg.sex[order(agg.sex$BOTDEPTH.bin),]
-  agg.sex$BOTDEPTH.bin=as.numeric(as.character(agg.sex$BOTDEPTH.bin))
-  agg.sex$prop=agg.sex$N.male/agg.sex$Sum
-  x=agg.sex$BOTDEPTH.bin
-  y=agg.sex$prop
-  plot(x,y,ylim=c(0,1),xlim=c(0,max(x)*1.1),ylab="",xlab="",type='h',xaxt='n',yaxt='n',lwd=2.5,pch=19,col=1,cex=1.5)
-  abline(h=0.5,lty=2,col="grey50")
-  axis(2,seq(0,1,.2),F,cex.axis=1.25)
-  axis(1,seq(0,300,50),seq(0,300,50),cex.axis=1.25)
-  axis(1,seq(0,300,10),F,tck=-0.02)
-  mtext(sP,3,line=0,cex=0.95)
-}
-
-tiff("Figure S3.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(5,3),mai=c(0.2,.1,0.175,.01),oma=c(2,3,0.15,0.01),las=1,mgp=c(2.5,.6,0))
-for(i in 1:length(Output.GLM.sex))
-{
-  fn.show.spatial.sex.depth(Output.GLM.sex[[i]]$data,Species.labels.Scientific[i])
-  if(i %in% 1:5)   axis(2,seq(0,1,.2),seq(0,1,.2),cex.axis=1.25)
-
-}
-mtext("Depth (m)",side=1,line=0.7,font=1,las=0,cex=1.25,outer=T)
-mtext("Proportion of males",side=2,line=1.45,font=1,las=0,cex=1.25,outer=T)
-dev.off()
-
-
-
-
-
-
-
-#NOTE USED #####
-
-#1.2 Test Block effect
-
-#Select appropriate data for comparisons
-fn.subset=function(dat)
-{
-  Bk.yr=table(dat$BLOCK,dat$year)
-  Bk.yr=ifelse(Bk.yr>1,1,0)
-  Sum.Yr=colSums(Bk.yr)
-  ID=which(Sum.Yr>=5)  #drop years with less than 5 occurrences
-  dat=subset(dat,year%in%names(ID))
-  if(nrow(dat)>1)
+  #add scale
+  plot(1:10,col="transparent",xaxt='n',yaxt='n',ann=F)
+  Zn.leg=rev(c("JANSF","WANCSF","Closure","WCDGDLF","Zone 1","Zone 2"))
+  Zn.col=rev(c("grey40","grey85",NA,"grey70","white","grey55"))
+  pCH=rev(c(22,22,12,22,22,22))
+  for(t in 1:length(Zn.leg))
   {
-    Bk.Mn=table(dat$BLOCK,dat$Month)
-    Bk.Mn=ifelse(Bk.Mn>1,1,0)
-    Sum.Mn=colSums(Bk.Mn)
-    ID=which(Sum.Mn>=5)
-    dat=subset(dat,Month%in%names(ID))
+    points(2,3.5+t,pch=pCH[t],bg=Zn.col[t],cex=1.85)
+    text(2.25,3.5+t,Zn.leg[t],pos=4,cex=0.9)
   }
-
-  return(dat)
-}
-
-   
-This.sp=This.sp[-match(c("LE","PJ","SD","WE","ES"),This.sp)] #Drop species with no data after criteria
-
-Data.GLM=vector('list',length(This.sp))
-names(Data.GLM)=This.sp
-for(i in 1:length(Data.GLM))Data.GLM[[i]]=fn.subset(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
-
-MaxDepth=250
-Sex.fn=function(dat)
-{
-  Mn=sort(unique(dat$Month))
-  DaT=vector('list',length(Mn))
-  names(DaT)=Mn
-  ANOV=data.frame(Month=Mn,p=NA,N.blk=NA)
-  for (x in 1:length(Mn))
+  box(col="white")
+  
+  mtext("Longitude (?E) ",side=1,line=0.95,font=1,las=0,cex=1.15,outer=T)
+  mtext("Latitude (?S)",side=2,line=0.55,font=1,las=0,cex=1.15,outer=T)
+  dev.off()
+  
+  
+  
+  
+  
+  #3.4. Depth
+  fn.show.spatial.sex.depth=function(dat,sP)
   {
-    dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ) & Month==Mn[x])
+    agg.Male=aggregate(Number~BOTDEPTH.bin,subset(dat,SEX=="M"),sum)
+    names(agg.Male)[2]="N.male"
+    agg.Fem=aggregate(Number~BOTDEPTH.bin,subset(dat,SEX=="F"),sum)
+    names(agg.Fem)[2]="N.female"
+    agg.sex=merge(agg.Male,agg.Fem,by=c("BOTDEPTH.bin"),all.x=T,all.y=T)
+    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$Sum=agg.sex$N.male+agg.sex$N.female
+    agg.sex=subset(agg.sex,Sum>4)
+    agg.sex=agg.sex[order(agg.sex$BOTDEPTH.bin),]
+    agg.sex$BOTDEPTH.bin=as.numeric(as.character(agg.sex$BOTDEPTH.bin))
+    agg.sex$prop=agg.sex$N.male/agg.sex$Sum
+    x=agg.sex$BOTDEPTH.bin
+    y=agg.sex$prop
+    plot(x,y,ylim=c(0,1),xlim=c(0,max(x)*1.1),ylab="",xlab="",type='h',xaxt='n',yaxt='n',lwd=2.5,pch=19,col=1,cex=1.5)
+    abline(h=0.5,lty=2,col="grey50")
+    axis(2,seq(0,1,.2),F,cex.axis=1.25)
+    axis(1,seq(0,300,50),seq(0,300,50),cex.axis=1.25)
+    axis(1,seq(0,300,10),F,tck=-0.02)
+    mtext(sP,3,line=0,cex=0.95)
+  }
+  
+  tiff("Figure S3.tiff",width = 1300, height = 2200,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(5,3),mai=c(0.2,.1,0.175,.01),oma=c(2,3,0.15,0.01),las=1,mgp=c(2.5,.6,0))
+  for(i in 1:length(Output.GLM.sex))
+  {
+    fn.show.spatial.sex.depth(Output.GLM.sex[[i]]$data,Species.labels.Scientific[i])
+    if(i %in% 1:5)   axis(2,seq(0,1,.2),seq(0,1,.2),cex.axis=1.25)
+    
+  }
+  mtext("Depth (m)",side=1,line=0.7,font=1,las=0,cex=1.25,outer=T)
+  mtext("Proportion of males",side=2,line=1.45,font=1,las=0,cex=1.25,outer=T)
+  dev.off()
+  
+  
+  
+  
+  
+  
+  
+  #NOTE USED #####
+  
+  #1.2 Test Block effect
+  
+  #Select appropriate data for comparisons
+  fn.subset=function(dat)
+  {
+    Bk.yr=table(dat$BLOCK,dat$year)
+    Bk.yr=ifelse(Bk.yr>1,1,0)
+    Sum.Yr=colSums(Bk.yr)
+    ID=which(Sum.Yr>=5)  #drop years with less than 5 occurrences
+    dat=subset(dat,year%in%names(ID))
+    if(nrow(dat)>1)
+    {
+      Bk.Mn=table(dat$BLOCK,dat$Month)
+      Bk.Mn=ifelse(Bk.Mn>1,1,0)
+      Sum.Mn=colSums(Bk.Mn)
+      ID=which(Sum.Mn>=5)
+      dat=subset(dat,Month%in%names(ID))
+    }
+    
+    return(dat)
+  }
+  
+  
+  This.sp=This.sp[-match(c("LE","PJ","SD","WE","ES"),This.sp)] #Drop species with no data after criteria
+  
+  Data.GLM=vector('list',length(This.sp))
+  names(Data.GLM)=This.sp
+  for(i in 1:length(Data.GLM))Data.GLM[[i]]=fn.subset(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
+  
+  MaxDepth=250
+  Sex.fn=function(dat)
+  {
+    Mn=sort(unique(dat$Month))
+    DaT=vector('list',length(Mn))
+    names(DaT)=Mn
+    ANOV=data.frame(Month=Mn,p=NA,N.blk=NA)
+    for (x in 1:length(Mn))
+    {
+      dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ) & Month==Mn[x])
+      Table=table(dat1$BLOCK)
+      ID=which(Table>=5)
+      dat1=subset(dat1,BLOCK%in%names(Table[ID]))
+      dat1$BLOCK=as.factor(dat1$BLOCK)
+      
+      agg.Male=aggregate(Number~BLOCK,subset(dat1,SEX=="M"),sum)
+      names(agg.Male)[2]="N.male"
+      agg.Fem=aggregate(Number~BLOCK,subset(dat1,SEX=="F"),sum)
+      names(agg.Fem)[2]="N.female"
+      agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK"),all.x=T,all.y=T)
+      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+      agg.sex=merge(agg.sex,Blk.pos,by="BLOCK",all.x=T)
+      DaT[[x]]=agg.sex
+      ANOV$N.blk[x]=nrow(agg.sex)
+      #glm
+      if(nrow(agg.sex)>1)
+      {
+        model<- glm(cbind(N.male,N.female)~BLOCK, data=agg.sex, family="binomial", maxit=500)
+        
+        #Anova table
+        ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
+        
+      }
+      
+    }
+    return(list(ANOV=ANOV,DaT=DaT))
+  }
+  
+  SEX.ratio.GN=vector('list',length(This.sp))
+  names(SEX.ratio.GN)=This.sp
+  for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.fn(Data.GLM[[i]])
+  
+  #get p values for each species
+  Months=1:12
+  see.p=function(dat)
+  {
+    dat$Species=names(SEX.ratio.GN)[i]
+    
+    ID=which(!Months%in%dat$Month)
+    if(length(ID)>0)
+    {
+      Add=data.frame(Month=Months[ID],p=NA, N.blk=NA, Species=names(SEX.ratio.GN)[i])
+      dat=rbind(dat,Add)
+      dat=dat[order(dat$Month),]
+    }
+    return(dat)
+  }
+  Store.p=SEX.ratio.GN
+  for(i in 1:length(SEX.ratio.GN))Store.p[[i]]=see.p(SEX.ratio.GN[[i]]$ANOV)
+  Store.p=do.call(rbind,Store.p)
+  Store.p.wide.p=reshape(Store.p[,c(1,2,4)],idvar ="Species",v.names=c("p"),timevar="Month",direction="wide")
+  Store.p.wide.N=reshape(Store.p[,c(1,3,4)],idvar ="Species",v.names=c("N.blk"),timevar="Month",direction="wide")
+  
+  Store.p.wide.p=merge(Store.p.wide.p,Tabl1.matrix[,c(3,9)],by.x="Species",by.y="Code",all.x=T)
+  Store.p.wide.p=Store.p.wide.p[order(-Store.p.wide.p$N),]
+  
+  write.csv(Store.p.wide.p,"Sex.ratio.p.values.csv",row.names=F)
+  
+  #ID for which species model is important and significant
+  #note: keep only those explaining more than 20% of the deviance
+  #Important=rep(NA,length(SEX.ratio.GN))
+  #for(i in 1:length(SEX.ratio.GN))Important[i]=(SEX.ratio.GN[[i]]$Dev.exp)
+  
+  
+  
+  
+  
+  #Show term effects 
+  
+  #1. Latitude and longitude effect
+  Species.labels=c("Blacktip shark", "Dusky shark","Gummy shark","Smooth hammerhead","Spinner shark",
+                   "Milk shark","Pencil shark","Tiger shark","Sandbar shark","Whiskery shark")
+  Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
+  ID=match(c("BW","TK","GM","WH"),names(SEX.ratio.GN))
+  Mnth=c(11,5,3,3)
+  
+  MNTH=c("November","May","March","March")
+  
+  fn.show.block=function(dat)
+  {
+    
+    #Observations
+    dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
     Table=table(dat1$BLOCK)
     ID=which(Table>=5)
     dat1=subset(dat1,BLOCK%in%names(Table[ID]))
@@ -2208,347 +2252,180 @@ Sex.fn=function(dat)
     agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
     agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
     agg.sex=merge(agg.sex,Blk.pos,by="BLOCK",all.x=T)
-    DaT[[x]]=agg.sex
-    ANOV$N.blk[x]=nrow(agg.sex)
-    #glm
-    if(nrow(agg.sex)>1)
+    agg.sex$Prop.male=(agg.sex$N.male+0.1)/(agg.sex$N.male+agg.sex$N.female)
+    
+    plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
+            plt = NULL,col="grey70",tck = 0.025, tckMinor = 0.0125,
+            xlab="",ylab="",axes=F)
+    lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="grey50")
+    #points((agg.sex$LONG),(agg.sex$LAT-1),col=1,pch=19,cex=agg.sex$Prop.male*EXP)
+    #pie chart
+    for(j in 1:nrow(agg.sex))
     {
-      model<- glm(cbind(N.male,N.female)~BLOCK, data=agg.sex, family="binomial", maxit=500)
+      floating.pie(agg.sex$LONG[j],agg.sex$LAT[j]-1,c(agg.sex$N.male[j]+.1,agg.sex$N.female[j]+.1),
+                   radius=0.45,col=c("grey95","black"))
+    }
+    axis(2,seq(YAXIS[1],YAXIS[2],2),F)
+    axis(1,seq(XAXIS[1],XAXIS[2],2),F)
+    box() 
+  }
+  
+  
+  XAXIS=c(110,134.5)
+  YAXIS=c(-37,-13)
+  
+  tiff("Figure 1.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(2,2),mai=c(0.6,0.5,0.1,0),oma=c(0.1,0.1,0.1,0.1))
+  for (i in 1:length(ID))
+  {
+    fn.show.block(subset(Data.GLM[[ID[i]]],SPECIES==names(SEX.ratio.GN)[ID[i]] & SEX%in%c("M","F") & Month==Mnth[i]))
+    #fn.show.block(SEX.ratio.GN[[ID[i]]]$DaT[[Mnth[i]]])
+    
+    legend(108,-12,Comm.Species.labels[i],bty='n',cex=1.65)
+    legend(108.5,-14,paste("(",MNTH[i],")",sep=""),bty='n',cex=1.3)
+    if(i%in%c(1:2))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.25,las=2)
+    if(i%in%c(2,4)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.25)
+    
+    if(i==1)
+    {
+      legend(114,-22,"Western",bty='n',cex=1.75)
+      legend(114,-25,"Australia",bty='n',cex=1.75)
+    }
+    
+  }
+  
+  mtext("Longitude (?E)",side=1,line=-1.125,font=1,las=0,cex=1.7,outer=T)
+  mtext("Latitude (?S)",side=2,line=-1.5,font=1,las=0,cex=1.7,outer=T)
+  dev.off()
+  
+  
+  
+  
+  #1.3 Test Month effect
+  
+  #Select appropriate data for comparisons
+  fn.subset.Mn=function(dat)
+  {
+    Bk.yr=table(dat$BLOCK,dat$year)
+    Bk.yr=ifelse(Bk.yr>1,1,0)
+    Sum.Yr=colSums(Bk.yr)
+    ID=which(Sum.Yr>=5)  #drop years with less than 5 occurrences
+    dat=subset(dat,year%in%names(ID))
+    if(nrow(dat)>1)
+    {
+      Bk.Mn=table(dat$BLOCK,dat$Month)
+      Bk.Mn=ifelse(Bk.Mn>1,1,0)
+      Sum.Blk=rowSums(Bk.Mn)
+      ID=names(which(Sum.Blk==max(Sum.Blk)))
+      dat=subset(dat,BLOCK==ID[1])
+    }
+    
+    return(dat)
+  }
+  
+  Data.GLM.Mn=vector('list',length(This.sp))
+  names(Data.GLM.Mn)=This.sp
+  for(i in 1:length(Data.GLM.Mn))Data.GLM.Mn[[i]]=fn.subset.Mn(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
+  
+  
+  Sex.Mn.fn=function(dat)
+  {
+    Mn=sort(unique(dat$BLOCK))
+    ANOV=data.frame(BLOCK=Mn,p=NA,N.months=NA)
+    for (x in 1:length(Mn))
+    {
+      dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ) & BLOCK==Mn[x])
+      Table=table(dat1$Month)
+      ID=which(Table>=5)
+      dat1=subset(dat1,Month%in%names(Table[ID]))
+      dat1$Month=as.factor(dat1$Month)
       
-      #Anova table
-      ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
+      agg.Male=aggregate(Number~Month,subset(dat1,SEX=="M"),sum)
+      names(agg.Male)[2]="N.male"
+      agg.Fem=aggregate(Number~Month,subset(dat1,SEX=="F"),sum)
+      names(agg.Fem)[2]="N.female"
+      agg.sex=merge(agg.Male,agg.Fem,by=c("Month"),all.x=T,all.y=T)
+      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+      
+      ANOV$N.months[x]=nrow(agg.sex)
+      #glm
+      if(ncol(agg.sex)>1)
+      {
+        model<- glm(cbind(N.male,N.female)~Month, data=agg.sex, family="binomial", maxit=500)
+        
+        #Anova table
+        ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
+        
+      }
       
     }
-
+    return(ANOV)
   }
-  return(list(ANOV=ANOV,DaT=DaT))
-}
-
-SEX.ratio.GN=vector('list',length(This.sp))
-names(SEX.ratio.GN)=This.sp
-for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.fn(Data.GLM[[i]])
-
-#get p values for each species
-Months=1:12
-see.p=function(dat)
-{
-  dat$Species=names(SEX.ratio.GN)[i]
   
-  ID=which(!Months%in%dat$Month)
-  if(length(ID)>0)
-  {
-    Add=data.frame(Month=Months[ID],p=NA, N.blk=NA, Species=names(SEX.ratio.GN)[i])
-    dat=rbind(dat,Add)
-    dat=dat[order(dat$Month),]
-  }
-  return(dat)
-}
-Store.p=SEX.ratio.GN
-for(i in 1:length(SEX.ratio.GN))Store.p[[i]]=see.p(SEX.ratio.GN[[i]]$ANOV)
-Store.p=do.call(rbind,Store.p)
-Store.p.wide.p=reshape(Store.p[,c(1,2,4)],idvar ="Species",v.names=c("p"),timevar="Month",direction="wide")
-Store.p.wide.N=reshape(Store.p[,c(1,3,4)],idvar ="Species",v.names=c("N.blk"),timevar="Month",direction="wide")
-
-Store.p.wide.p=merge(Store.p.wide.p,Tabl1.matrix[,c(3,9)],by.x="Species",by.y="Code",all.x=T)
-Store.p.wide.p=Store.p.wide.p[order(-Store.p.wide.p$N),]
-
-write.csv(Store.p.wide.p,"Sex.ratio.p.values.csv",row.names=F)
-
-#ID for which species model is important and significant
-#note: keep only those explaining more than 20% of the deviance
-#Important=rep(NA,length(SEX.ratio.GN))
-#for(i in 1:length(SEX.ratio.GN))Important[i]=(SEX.ratio.GN[[i]]$Dev.exp)
-
-
-
+  SEX.ratio.GN=vector('list',length(This.sp))
+  names(SEX.ratio.GN)=This.sp
+  for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.Mn.fn(Data.GLM.Mn[[i]])
+  
+  #get p values for each species
+  Store.p=do.call(rbind,SEX.ratio.GN)
+  Store.p$Species=rownames(Store.p)
+  write.csv(Store.p,"Sex.ratio.Month.p.values.csv",row.names=F)
+  
+  
   #Show term effects 
-
-#1. Latitude and longitude effect
-Species.labels=c("Blacktip shark", "Dusky shark","Gummy shark","Smooth hammerhead","Spinner shark",
-                 "Milk shark","Pencil shark","Tiger shark","Sandbar shark","Whiskery shark")
-Comm.Species.labels=c("Dusky shark","Sandbar shark","Gummy shark","Whiskery shark")
-ID=match(c("BW","TK","GM","WH"),names(SEX.ratio.GN))
-Mnth=c(11,5,3,3)
-
-MNTH=c("November","May","March","March")
-
-fn.show.block=function(dat)
-{
-  
-  #Observations
-  dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
-  Table=table(dat1$BLOCK)
-  ID=which(Table>=5)
-  dat1=subset(dat1,BLOCK%in%names(Table[ID]))
-  dat1$BLOCK=as.factor(dat1$BLOCK)
-  
-  agg.Male=aggregate(Number~BLOCK,subset(dat1,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~BLOCK,subset(dat1,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex=merge(agg.sex,Blk.pos,by="BLOCK",all.x=T)
-  agg.sex$Prop.male=(agg.sex$N.male+0.1)/(agg.sex$N.male+agg.sex$N.female)
-  
-  plotMap(worldLLhigh, xlim=XAXIS,ylim=YAXIS,
-          plt = NULL,col="grey70",tck = 0.025, tckMinor = 0.0125,
-          xlab="",ylab="",axes=F)
-  lines(rbind(129,129),rbind(-15,-31.5),lty=2,col="grey50")
-  #points((agg.sex$LONG),(agg.sex$LAT-1),col=1,pch=19,cex=agg.sex$Prop.male*EXP)
-  #pie chart
-  for(j in 1:nrow(agg.sex))
+  fn.show.block=function(dat)
   {
-    floating.pie(agg.sex$LONG[j],agg.sex$LAT[j]-1,c(agg.sex$N.male[j]+.1,agg.sex$N.female[j]+.1),
-                 radius=0.45,col=c("grey95","black"))
-  }
-  axis(2,seq(YAXIS[1],YAXIS[2],2),F)
-  axis(1,seq(XAXIS[1],XAXIS[2],2),F)
-  box() 
-}
-
-
-XAXIS=c(110,134.5)
-YAXIS=c(-37,-13)
-
-tiff("Figure 1.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(2,2),mai=c(0.6,0.5,0.1,0),oma=c(0.1,0.1,0.1,0.1))
-for (i in 1:length(ID))
-{
-  fn.show.block(subset(Data.GLM[[ID[i]]],SPECIES==names(SEX.ratio.GN)[ID[i]] & SEX%in%c("M","F") & Month==Mnth[i]))
-  #fn.show.block(SEX.ratio.GN[[ID[i]]]$DaT[[Mnth[i]]])
-  
-  legend(108,-12,Comm.Species.labels[i],bty='n',cex=1.65)
-  legend(108.5,-14,paste("(",MNTH[i],")",sep=""),bty='n',cex=1.3)
-  if(i%in%c(1:2))  axis(2,seq(YAXIS[1],YAXIS[2],4),-seq(YAXIS[1],YAXIS[2],4),cex.axis=1.25,las=2)
-  if(i%in%c(2,4)) axis(1,seq(XAXIS[1],XAXIS[2],4),seq(XAXIS[1],XAXIS[2],4),cex.axis=1.25)
-
-  if(i==1)
-  {
-    legend(114,-22,"Western",bty='n',cex=1.75)
-    legend(114,-25,"Australia",bty='n',cex=1.75)
-  }
-  
-}
-
-mtext("Longitude (?E)",side=1,line=-1.125,font=1,las=0,cex=1.7,outer=T)
-mtext("Latitude (?S)",side=2,line=-1.5,font=1,las=0,cex=1.7,outer=T)
-dev.off()
-
-
-
-
-#1.3 Test Month effect
-
-#Select appropriate data for comparisons
-fn.subset.Mn=function(dat)
-{
-  Bk.yr=table(dat$BLOCK,dat$year)
-  Bk.yr=ifelse(Bk.yr>1,1,0)
-  Sum.Yr=colSums(Bk.yr)
-  ID=which(Sum.Yr>=5)  #drop years with less than 5 occurrences
-  dat=subset(dat,year%in%names(ID))
-  if(nrow(dat)>1)
-  {
-    Bk.Mn=table(dat$BLOCK,dat$Month)
-    Bk.Mn=ifelse(Bk.Mn>1,1,0)
-    Sum.Blk=rowSums(Bk.Mn)
-    ID=names(which(Sum.Blk==max(Sum.Blk)))
-    dat=subset(dat,BLOCK==ID[1])
-  }
-  
-  return(dat)
-}
-
-Data.GLM.Mn=vector('list',length(This.sp))
-names(Data.GLM.Mn)=This.sp
-for(i in 1:length(Data.GLM.Mn))Data.GLM.Mn[[i]]=fn.subset.Mn(subset(DATA,SPECIES%in%This.sp[i]& SEX%in%c("M","F")))
-
-
-Sex.Mn.fn=function(dat)
-{
-  Mn=sort(unique(dat$BLOCK))
-  ANOV=data.frame(BLOCK=Mn,p=NA,N.months=NA)
-  for (x in 1:length(Mn))
-  {
-    dat1=subset(dat,!(is.na(BLOCK) | BLOCK==0 ) & BLOCK==Mn[x])
-    Table=table(dat1$Month)
-    ID=which(Table>=5)
-    dat1=subset(dat1,Month%in%names(Table[ID]))
-    dat1$Month=as.factor(dat1$Month)
     
-    agg.Male=aggregate(Number~Month,subset(dat1,SEX=="M"),sum)
+    #Observations
+    agg.Male=aggregate(Number~Month,subset(dat,SEX=="M"),sum)
     names(agg.Male)[2]="N.male"
-    agg.Fem=aggregate(Number~Month,subset(dat1,SEX=="F"),sum)
+    agg.Fem=aggregate(Number~Month,subset(dat,SEX=="F"),sum)
     names(agg.Fem)[2]="N.female"
     agg.sex=merge(agg.Male,agg.Fem,by=c("Month"),all.x=T,all.y=T)
     agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
     agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+    agg.sex$Prop.male=(agg.sex$N.male)/(agg.sex$N.male+agg.sex$N.female)
     
-    ANOV$N.months[x]=nrow(agg.sex)
-    #glm
-    if(ncol(agg.sex)>1)
+    
+    ID=which(!Months%in%agg.sex$Month)
+    if(length(ID)>0)
     {
-      model<- glm(cbind(N.male,N.female)~Month, data=agg.sex, family="binomial", maxit=500)
-      
-      #Anova table
-      ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
-      
+      Add=data.frame(Month=Months[ID],N.male=NA, N.female=NA, Prop.male=NA)
+      agg.sex=rbind(agg.sex,Add)
+      agg.sex=agg.sex[order(agg.sex$Month),]
     }
-    
+    return(agg.sex)
   }
-  return(ANOV)
-}
-
-SEX.ratio.GN=vector('list',length(This.sp))
-names(SEX.ratio.GN)=This.sp
-for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.Mn.fn(Data.GLM.Mn[[i]])
-
-#get p values for each species
-Store.p=do.call(rbind,SEX.ratio.GN)
-Store.p$Species=rownames(Store.p)
-write.csv(Store.p,"Sex.ratio.Month.p.values.csv",row.names=F)
-
-
-#Show term effects 
-fn.show.block=function(dat)
-{
   
-  #Observations
-  agg.Male=aggregate(Number~Month,subset(dat,SEX=="M"),sum)
-  names(agg.Male)[2]="N.male"
-  agg.Fem=aggregate(Number~Month,subset(dat,SEX=="F"),sum)
-  names(agg.Fem)[2]="N.female"
-  agg.sex=merge(agg.Male,agg.Fem,by=c("Month"),all.x=T,all.y=T)
-  agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-  agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-  agg.sex$Prop.male=(agg.sex$N.male)/(agg.sex$N.male+agg.sex$N.female)
+  Store.Mn.out=Data.GLM.Mn
+  for(i in 1:length(Data.GLM.Mn)) Store.Mn.out[[i]]=fn.show.block(Data.GLM.Mn[[i]])
+  
+  #COL=grey.colors(length(Data.GLM.Mn), start = 0.3, end = 0.9, gamma = 2.2, alpha = NULL)
+  COL=c("black","grey60","black","grey60")
+  LTY=c(1,2,2,1)
+  
+  tiff("Figure 2.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
+  par(mfcol=c(1,1),mai=c(0.8,0.8,0.1,0),oma=c(0.1,0.1,0.1,0.1),mgp=c(2.5,.6,0))
+  plot(Months,ylab="Proportion male",xlab="Month",cex.lab=1.75,cex.axis=1.5,ylim=c(0,1),col="transparent",las=1)
+  for(i in 10:length(Data.GLM.Mn)) lines(Store.Mn.out[[i]]$Month,Store.Mn.out[[i]]$Prop.male,col=COL[i-9],lty=LTY[i-9],lwd=2)
+  legend("topright",c("Whiskery shark","Gummy shark","Sandbar shark","Dusky shark"),bty='n',lty=LTY,col=COL,lwd=2,cex=1.5)
+  
+  dev.off()
   
   
-  ID=which(!Months%in%agg.sex$Month)
-  if(length(ID)>0)
+  
+  #1.4 Test Depth effect
+  MaxDepth=250
+  Sex.fn.Depth=function(dat)
   {
-    Add=data.frame(Month=Months[ID],N.male=NA, N.female=NA, Prop.male=NA)
-    agg.sex=rbind(agg.sex,Add)
-    agg.sex=agg.sex[order(agg.sex$Month),]
-  }
-  return(agg.sex)
-}
-
-Store.Mn.out=Data.GLM.Mn
-for(i in 1:length(Data.GLM.Mn)) Store.Mn.out[[i]]=fn.show.block(Data.GLM.Mn[[i]])
-
-#COL=grey.colors(length(Data.GLM.Mn), start = 0.3, end = 0.9, gamma = 2.2, alpha = NULL)
-COL=c("black","grey60","black","grey60")
-LTY=c(1,2,2,1)
-
-tiff("Figure 2.tiff",width = 2400, height = 2400,units = "px", res = 300,compression = "lzw")
-par(mfcol=c(1,1),mai=c(0.8,0.8,0.1,0),oma=c(0.1,0.1,0.1,0.1),mgp=c(2.5,.6,0))
-plot(Months,ylab="Proportion male",xlab="Month",cex.lab=1.75,cex.axis=1.5,ylim=c(0,1),col="transparent",las=1)
-for(i in 10:length(Data.GLM.Mn)) lines(Store.Mn.out[[i]]$Month,Store.Mn.out[[i]]$Prop.male,col=COL[i-9],lty=LTY[i-9],lwd=2)
-legend("topright",c("Whiskery shark","Gummy shark","Sandbar shark","Dusky shark"),bty='n',lty=LTY,col=COL,lwd=2,cex=1.5)
-
-dev.off()
-
-
-
-#1.4 Test Depth effect
-MaxDepth=250
-Sex.fn.Depth=function(dat)
-{
-  dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
-  Table.Mn.Blk=table(dat$BLOCK,dat$Month)
-  Mn=sort(unique(dat$Month))
-  ANOV=data.frame(Month=Mn,p=NA,coef=NA)
-  for (x in 1:length(Mn))
-  {
-    dat1=subset(dat,Month==Mn[x])
-    Table=table(dat1$BOTDEPTH,dat1$BLOCK)
-    Table=ifelse(Table>=1,1,0)
-    ID=colSums(Table)
-    ID=names(which(ID==max(ID)))
-    dat1=subset(dat1,BLOCK==ID[1])
-    
-    if(nrow(subset(dat1,SEX=="M"))>0)
+    dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
+    Table.Mn.Blk=table(dat$BLOCK,dat$Month)
+    Mn=sort(unique(dat$Month))
+    ANOV=data.frame(Month=Mn,p=NA,coef=NA)
+    for (x in 1:length(Mn))
     {
-      agg.Male=aggregate(Number~BOTDEPTH,subset(dat1,SEX=="M"),sum)
-      names(agg.Male)[2]="N.male"
-      agg.Fem=aggregate(Number~BOTDEPTH,subset(dat1,SEX=="F"),sum)
-      names(agg.Fem)[2]="N.female"
-      agg.sex=merge(agg.Male,agg.Fem,by=c("BOTDEPTH"),all.x=T,all.y=T)
-      agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-      agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-      agg.sex$Tot=agg.sex$N.male+agg.sex$N.female
-      agg.sex=subset(agg.sex,Tot>=4)
-      
-      #glm
-      if(nrow(agg.sex)>1)
-      {
-        model<- glm(cbind(N.male,N.female)~BOTDEPTH, data=agg.sex, family="binomial", maxit=500)
-        
-        #Anova table
-        ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
-        ANOV$coef[x]=coef(model)[2]
-      }
-      
-    }
-    
-  }
-  return(ANOV)
-}
-
-SEX.ratio.GN=vector('list',length(This.sp))
-names(SEX.ratio.GN)=This.sp
-for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.fn.Depth(Data.GLM[[i]])
-
-#get p values for each species
-see.p=function(dat)
-{
-  dat$Species=names(SEX.ratio.GN)[i]
-  
-  ID=which(!Months%in%dat$Month)
-  if(length(ID)>0)
-  {
-    Add=data.frame(Month=Months[ID],p=NA, coef=NA, Species=names(SEX.ratio.GN)[i])
-    dat=rbind(dat,Add)
-    dat=dat[order(dat$Month),]
-  }
-  return(dat)
-}
-Store.p=SEX.ratio.GN
-for(i in 1:length(SEX.ratio.GN))Store.p[[i]]=see.p(SEX.ratio.GN[[i]])
-Store.p=do.call(rbind,Store.p)
-Store.p.wide.p=reshape(Store.p[,c(1,2,4)],idvar ="Species",v.names=c("p"),timevar="Month",direction="wide")
-Store.p.wide.coef=reshape(Store.p[,c(1,3,4)],idvar ="Species",v.names=c("coef"),timevar="Month",direction="wide")
-
-Store.p.wide.p=merge(Store.p.wide.p,Tabl1.matrix[,c(3,9)],by.x="Species",by.y="Code",all.x=T)
-Store.p.wide.p=Store.p.wide.p[order(-Store.p.wide.p$N),]
-
-write.csv(Store.p.wide.p,"Sex.ratio.p.values.Depth.csv",row.names=F)
-
-
-#Show term effects 
-PCH=21
-COL1=c("black","grey80","grey45","white")
-fn.show.block=function(dat)
-{
-  #Observations
-  dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
-  
-  SP=names(table(dat$SPECIES))
-  Mn=sort(unique(dat$Month))
-  
-  par(mfcol=c(3,4))
-  for (x in 1:length(Mn))
-  {
-    dat.M=subset(dat,Month==Mn[x])
-    
-    SP1=names(table(dat.M$SPECIES)) 
-    plot(1:max(dat.M$BOTDEPTH,na.rm=T),ylim=c(0,1),col='transparent',las=1,ylab='',xlab="",main=Mn[x])
-    for(n in 1:length(SP1))
-    {
-      dat1=subset(dat.M,SPECIES==SP1[n])
+      dat1=subset(dat,Month==Mn[x])
       Table=table(dat1$BOTDEPTH,dat1$BLOCK)
       Table=ifelse(Table>=1,1,0)
       ID=colSums(Table)
@@ -2566,130 +2443,148 @@ fn.show.block=function(dat)
         agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
         agg.sex$Tot=agg.sex$N.male+agg.sex$N.female
         agg.sex=subset(agg.sex,Tot>=4)
-        agg.sex$prop=agg.sex$N.male/agg.sex$N.female
-        points(agg.sex$BOTDEPTH,agg.sex$prop,bg=COL1[n],pch=PCH,cex=2)
+        
+        #glm
+        if(nrow(agg.sex)>1)
+        {
+          model<- glm(cbind(N.male,N.female)~BOTDEPTH, data=agg.sex, family="binomial", maxit=500)
+          
+          #Anova table
+          ANOV$p[x]=round(anova(model,test="Chisq")$"Pr(>Chi)"[2],3)
+          ANOV$coef[x]=coef(model)[2]
+        }
+        
       }
       
-    } 
-  }
-  plot(1:max(dat.M$BOTDEPTH,na.rm=T),ylim=c(0,1),col='transparent',xaxt='n',yaxt='n',ylab='',xlab="")
-  legend("center",SP,pch=PCH,col=1,pt.bg=COL1,bty='n',cex=2)
-}
-
-fn.show.block(rbind(Data.GLM[["WH"]],Data.GLM[["GM"]],Data.GLM[["TK"]],Data.GLM[["BW"]]))
-
-
-
-
-
-
-
-
-
-
-####
-
-
-
-
-Data.GLM=vector('list',length(This.sp))
-names(Data.GLM)=This.sp
-for(i in 1:length(Data.GLM))Data.GLM[[i]]=fn.subset(subset(DATA,SPECIES%in%This.sp[i]))
-
-
-#2.1 Density distributions
-Dens.dist=function(datas,Gear)
-{
-  datas=subset(datas,Method==Gear)
-  name=unique(datas$COMMON_NAME)
-  d <- density(datas$FL,adjust = 2)
-  plot(d, type="n", main=name)
-  polygon(d, col="red", border="gray")
-}
-
-Dens.dist(subset(DATA,SPECIES=="BW"),"GN")
-
-
-#2.2
-#2.2 GLM By GN (6 to 8 inch) and LL separately
-Size.fn=function(dat)
-{
-  dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 | is.na(FL) | FL<=20 | FL>550))
-  dat$year=as.factor(dat$year)
-  dat$Month=as.factor(dat$Month)
-  dat$BLOCK=as.factor(dat$BLOCK)
-
-  model<- glm(log(FL)~BLOCK+year+Month+SOI+Freo, data=dat, family=gaussian, maxit=500)
-  
-  #Anova table
-  Signifcance1=anova(model,test="Chisq")
-  
-  #Deviance explained
-  Dev.exp=Dsquared(model,adjust=F)$d3
-  
-  return(list(model=model,ANOVA=Signifcance1,Dev.exp=Dev.exp))
-}
-Size.fn(subset(DATA,SPECIES%in%Commercial.Sks[i]))
-
-
-
-
-
-
-
-#NOT USED
-USE.THESE="NO"
-if USE.THESE=="YES"
-{
-  #1.1 Mapping
-  fn.plot.sex=function(dat,XLIM,YLIM)
-  {
-    
-    agg.Male=aggregate(Number~BLOCK,subset(dat,SEX=="M"),sum)
-    names(agg.Male)[2]="N.male"
-    agg.Fem=aggregate(Number~BLOCK,subset(dat,SEX=="F"),sum)
-    names(agg.Fem)[2]="N.female"
-    agg.sex=merge(agg.Male,agg.Fem,by=c("BLOCK"),all.x=T,all.y=T)
-    agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
-    agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
-    agg.sex=merge(agg.sex,Blk.pos,by="BLOCK",all.x=T)
-    
-    plotMap(worldLLhigh, xlim=XLIM,ylim=YLIM,
-            plt = c(.1, .99, 0.1, 1),col="grey70",tck = 0.025, tckMinor = 0.0125, xlab="",ylab="",axes=F)
-    #pie chart
-    for(j in 1:nrow(agg.sex))floating.pie(agg.sex$Mid.Long[j],agg.sex$Mid.Lat[j],c(agg.sex$N.male[j],agg.sex$N.female[j]),radius=0.15,col=c("black","grey90"))
+    }
+    return(ANOV)
   }
   
-  fn.plot.sex(subset(DATA,SPECIES==names(This.important)& SEX%in%c("M","F")),c(112,129),c(-36,-26))
+  SEX.ratio.GN=vector('list',length(This.sp))
+  names(SEX.ratio.GN)=This.sp
+  for(i in 1:length(This.sp))SEX.ratio.GN[[i]]=Sex.fn.Depth(Data.GLM[[i]])
   
-  
-  
-  #Plot predictions
-  fn.plot.pred=function(dat,model)
+  #get p values for each species
+  see.p=function(dat)
   {
-    Max.yr=names(which(table(dat$year)==max(table(dat$year))))
-    Max.Mn=names(which(table(dat$Month)==max(table(dat$Month))))
-    Max.Blk=names(which(table(dat$BLOCK)==max(table(dat$BLOCK))))
+    dat$Species=names(SEX.ratio.GN)[i]
     
+    ID=which(!Months%in%dat$Month)
+    if(length(ID)>0)
+    {
+      Add=data.frame(Month=Months[ID],p=NA, coef=NA, Species=names(SEX.ratio.GN)[i])
+      dat=rbind(dat,Add)
+      dat=dat[order(dat$Month),]
+    }
+    return(dat)
+  }
+  Store.p=SEX.ratio.GN
+  for(i in 1:length(SEX.ratio.GN))Store.p[[i]]=see.p(SEX.ratio.GN[[i]])
+  Store.p=do.call(rbind,Store.p)
+  Store.p.wide.p=reshape(Store.p[,c(1,2,4)],idvar ="Species",v.names=c("p"),timevar="Month",direction="wide")
+  Store.p.wide.coef=reshape(Store.p[,c(1,3,4)],idvar ="Species",v.names=c("coef"),timevar="Month",direction="wide")
+  
+  Store.p.wide.p=merge(Store.p.wide.p,Tabl1.matrix[,c(3,9)],by.x="Species",by.y="Code",all.x=T)
+  Store.p.wide.p=Store.p.wide.p[order(-Store.p.wide.p$N),]
+  
+  write.csv(Store.p.wide.p,"Sex.ratio.p.values.Depth.csv",row.names=F)
+  
+  
+  #Show term effects 
+  PCH=21
+  COL1=c("black","grey80","grey45","white")
+  fn.show.block=function(dat)
+  {
+    #Observations
+    dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 ))
+    
+    SP=names(table(dat$SPECIES))
+    Mn=sort(unique(dat$Month))
+    
+    par(mfcol=c(3,4))
+    for (x in 1:length(Mn))
+    {
+      dat.M=subset(dat,Month==Mn[x])
+      
+      SP1=names(table(dat.M$SPECIES)) 
+      plot(1:max(dat.M$BOTDEPTH,na.rm=T),ylim=c(0,1),col='transparent',las=1,ylab='',xlab="",main=Mn[x])
+      for(n in 1:length(SP1))
+      {
+        dat1=subset(dat.M,SPECIES==SP1[n])
+        Table=table(dat1$BOTDEPTH,dat1$BLOCK)
+        Table=ifelse(Table>=1,1,0)
+        ID=colSums(Table)
+        ID=names(which(ID==max(ID)))
+        dat1=subset(dat1,BLOCK==ID[1])
+        
+        if(nrow(subset(dat1,SEX=="M"))>0)
+        {
+          agg.Male=aggregate(Number~BOTDEPTH,subset(dat1,SEX=="M"),sum)
+          names(agg.Male)[2]="N.male"
+          agg.Fem=aggregate(Number~BOTDEPTH,subset(dat1,SEX=="F"),sum)
+          names(agg.Fem)[2]="N.female"
+          agg.sex=merge(agg.Male,agg.Fem,by=c("BOTDEPTH"),all.x=T,all.y=T)
+          agg.sex$N.male=with(agg.sex,ifelse(is.na(N.male),0,N.male))
+          agg.sex$N.female=with(agg.sex,ifelse(is.na(N.female),0,N.female))
+          agg.sex$Tot=agg.sex$N.male+agg.sex$N.female
+          agg.sex=subset(agg.sex,Tot>=4)
+          agg.sex$prop=agg.sex$N.male/agg.sex$N.female
+          points(agg.sex$BOTDEPTH,agg.sex$prop,bg=COL1[n],pch=PCH,cex=2)
+        }
+        
+      } 
+    }
+    plot(1:max(dat.M$BOTDEPTH,na.rm=T),ylim=c(0,1),col='transparent',xaxt='n',yaxt='n',ylab='',xlab="")
+    legend("center",SP,pch=PCH,col=1,pt.bg=COL1,bty='n',cex=2)
+  }
+  
+  fn.show.block(rbind(Data.GLM[["WH"]],Data.GLM[["GM"]],Data.GLM[["TK"]],Data.GLM[["BW"]]))
+  
+  
+  
+  
+  ####
+  
+  
+  
+  
+  Data.GLM=vector('list',length(This.sp))
+  names(Data.GLM)=This.sp
+  for(i in 1:length(Data.GLM))Data.GLM[[i]]=fn.subset(subset(DATA,SPECIES%in%This.sp[i]))
+  
+  
+  #2.1 Density distributions
+  Dens.dist=function(datas,Gear)
+  {
+    datas=subset(datas,Method==Gear)
+    name=unique(datas$COMMON_NAME)
+    d <- density(datas$FL,adjust = 2)
+    plot(d, type="n", main=name)
+    polygon(d, col="red", border="gray")
+  }
+  
+  Dens.dist(subset(DATA,SPECIES=="BW"),"GN")
+  
+  
+  #2.2
+  #2.2 GLM By GN (6 to 8 inch) and LL separately
+  Size.fn=function(dat)
+  {
+    dat=subset(dat,!(is.na(BLOCK) | BLOCK==0 | is.na(FL) | FL<=20 | FL>550))
     dat$year=as.factor(dat$year)
     dat$Month=as.factor(dat$Month)
     dat$BLOCK=as.factor(dat$BLOCK)
     
+    model<- glm(log(FL)~BLOCK+year+Month+SOI+Freo, data=dat, family=gaussian, maxit=500)
     
-    #Pred block
-    a=expand.grid(Mid.Lat=(-35:-26),Mid.Long=113:129, year=factor(Max.yr,levels=levels(dat$year)),
-                  Month=factor(Max.Mn,levels=levels(dat$Month)),BOTDEPTH=mean(dat$BOTDEPTH,na.rm=T),
-                  SOI=mean(dat$SOI), Freo=mean(dat$Freo,na.rm=T))
-    a$PRed.ratio=predict(model,a,"response")
+    #Anova table
+    Signifcance1=anova(model,test="Chisq")
     
-    plot(a$Mid.Long,a$Mid.Lat,pch=19,col=2 ,cex=a$PRed.ratio)
+    #Deviance explained
+    Dev.exp=Dsquared(model,adjust=F)$d3
     
-    #Pred yr
-    a=expand.grid(BLOCK=factor(Max.Blk,levels=levels(dat$BLOCK)), year=levels(dat$year),
-                  Month=factor(Max.Mn,levels=levels(dat$Month)),
-                  SOI=mean(dat$SOI), Freo=mean(dat$Freo,na.rm=T))
-    a$PRed.ratio=predict(model,a,"response")
-    plot(levels(dat$year),a$PRed.ratio)
+    return(list(model=model,ANOVA=Signifcance1,Dev.exp=Dev.exp))
   }
+  Size.fn(subset(DATA,SPECIES%in%Commercial.Sks[i]))
+  
 }
-
