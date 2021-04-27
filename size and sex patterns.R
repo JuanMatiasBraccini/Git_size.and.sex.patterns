@@ -18,31 +18,33 @@ do.paper=FALSE
 
 #DATA SECTION
 
+handl_OneDrive=function(x)paste('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias',x,sep='/')
+
 #Sharks data base  
 User="Matias"
-source('C:/Matias/Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R')
+source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R'))
 
 if(do.paper)
 {
   #Southern Oscillation Index
-  SOI=read.csv("C:/Matias/Data/SOI.1975_2013.csv")
+  SOI=read.csv(handl_OneDrive("Data/SOI.1975_2013.csv"))
   
   #Mean Freo sea level
-  Freo=read.csv("C:/Matias/Data/Freo_mean_sea_level.csv")
+  Freo=read.csv(handl_OneDrive("Data/Freo_mean_sea_level.csv"))
   names(Freo)[3]="Freo"
   
   #Sea Surface Temperature
-  Temperature=read.csv("C:/Matias/Data/SST.nice.format.csv")
+  Temperature=read.csv(handl_OneDrive("Data/SST.nice.format.csv"))
   
   
   #Shark zones
   library(rgdal)
-  JA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/JA_Northern_Shark.shp", layer="JA_Northern_Shark") 
-  WA_Northern_Shark=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthCoastShark_s43.shp", layer="NorthCoastShark_s43") 
-  WA_Northern_Shark_2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/NorthWestCoastShark_s43.shp", layer="NorthWestCoastShark_s43") 
-  SDGDLL_zone1=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone1.shp", layer="SDGDLL_zone1") 
-  SDGDLL_zone2=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/SDGDLL_zone2.shp", layer="SDGDLL_zone2") 
-  WCDGDLL=readOGR("C:/Matias/Data/Mapping/Shark_shape_files/WCDGDLL.shp", layer="WCDGDLL") 
+  JA_Northern_Shark=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/JA_Northern_Shark.shp"), layer="JA_Northern_Shark") 
+  WA_Northern_Shark=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/NorthCoastShark_s43.shp"), layer="NorthCoastShark_s43") 
+  WA_Northern_Shark_2=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/NorthWestCoastShark_s43.shp"), layer="NorthWestCoastShark_s43") 
+  SDGDLL_zone1=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/SDGDLL_zone1.shp"), layer="SDGDLL_zone1") 
+  SDGDLL_zone2=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/SDGDLL_zone2.shp"), layer="SDGDLL_zone2") 
+  WCDGDLL=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/WCDGDLL.shp", layer="WCDGDLL") 
   
   Current.year=2016
 }
@@ -56,7 +58,7 @@ fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
 
 
 #Export data for bycatch study
-write.csv(DATA,"C:/Matias/Analyses/Ecosystem indices and multivariate/Shark-bycatch/WA.csv",row.names=F)
+write.csv(DATA,handl_OneDrive("Analyses/Ecosystem indices and multivariate/Shark-bycatch/WA.csv"),row.names=F)
 
 
 
@@ -86,13 +88,13 @@ if(do.paper)
 {
   Commercial.Sks=c("BW","GM","TK","WH")
   Sks=unique(DATA$SPECIES)
-  write.csv(DATA,"C:/Matias/Analyses/Size and sex patterns/DATA.csv",row.names=F)
+  write.csv(DATA,handl_OneDrive("Analyses/Size and sex patterns/DATA.csv"),row.names=F)
 }
 
 
 #Extract data for pop din model and predict NA FL if TL available
-LH=read.csv('C:/Matias/Data/Life history parameters/Life_History.csv')
-All.species.names=read.csv("C:/Matias/Data/Species_names_shark.only.csv")
+LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
+All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
 All.species.names=All.species.names%>%
   mutate(Name=tolower(Name))%>%
   rename(SNAME=Name)
@@ -128,11 +130,11 @@ DATA.pop.din=DATA%>%
              MESH_SIZE=as.numeric(MESH_SIZE))%>%
       filter(SNAME%in%Keep.species)
 
-#ACA
+
 #Export size frequency other gears data for population dynamics modelling
 if (Export.dat=="YES")
 {
-  hndl='C:/Matias/Analyses/Data_outs/'
+  hndl=handl_OneDrive('Analyses/Data_outs/')
   for(s in 1:length(Keep.species))
   {
     dd1=DATA.pop.din%>%filter(SNAME==Keep.species[s])
@@ -207,7 +209,7 @@ if (Export.dat=="YES")
 
   #Export gillnet data for mean weight analysis
   Dat.weight.an=subset(DATA,Method=="GN" & MESH_SIZE%in%c("6","6.5","7"))
-  write.csv(Dat.weight.an,"C:/Matias/Analyses/Catch and effort/Survey.weight.csv",row.names=F)
+  write.csv(Dat.weight.an,handl_OneDrive("Analyses/Catch and effort/Survey.weight.csv"),row.names=F)
   
 }
 
@@ -295,7 +297,7 @@ fn.prop.dus=function(FL.neo, min.obs, min.yrs)
     if(q%in%c(4,7))axis(1,at=mp[seq(1,nrow(mp),2)],NMS[seq(1,nrow(mp),2)],tck=-0.06,cex.axis=1.25)
   }
 }
-tiff("C:/Matias/Analyses/Population dynamics/Prop.neonate.dusky.tiff",width = 2400, height = 2000,units = "px", res = 300,compression = "lzw")
+tiff(handl_OneDrive("Analyses/Population dynamics/Prop.neonate.dusky.tiff"),width = 2400, height = 2000,units = "px", res = 300,compression = "lzw")
 par(mfcol=c(4,2),mar=c(1,2,1,1),oma=c(3,3,.1,.1),las=1,mgp=c(2.5,.75,0),cex.axis=.8,cex.lab=1.1)
 fn.prop.dus(FL.dusky.neonate,min.obs=5,min.yrs=5)
 mtext("Proportion of neonates in catch",2,line=1,outer=T,las=3,cex=1.5)
@@ -307,7 +309,7 @@ dev.off()
 
 if(do.paper)
 {
-  setwd("C:/Matias/Analyses/Size and sex patterns")
+  setwd(handl_OneDrive("Analyses/Size and sex patterns"))
   
   
   #Table 1. Summary of numbers, size and sex ratios for all shark and ray species
@@ -469,7 +471,7 @@ if(do.paper)
   }
   
   #Export proportion of males in catch data for population dynamics modelling
-  hndl="C:/Matias/Data/Population dynamics/Prop.males.in.catch/"
+  hndl=handl_OneDrive("Data/Population dynamics/Prop.males.in.catch/")
   if (Export.dat=="YES")
   {
     for(q in 1:length(Zne.sx.Ratio))
@@ -598,7 +600,7 @@ if(do.paper)
   
   
   
-  setwd("C:/Matias/Analyses/Size and sex patterns")
+  setwd(handl_OneDrive("Analyses/Size and sex patterns"))
   
   #Species diversity
   fn.map=function()
