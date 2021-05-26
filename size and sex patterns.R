@@ -11,18 +11,18 @@ library(ReporteRs)
 library(dplyr)
 library(Hmisc)
 
-#controls
 
-Export.dat="YES"   #exporting size data for population dynamics
-do.paper=FALSE
-
-#DATA SECTION
+# DATA SECTION-------------------------------------------------------------------------
 
 if(!exists('handl_OneDrive')) source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
 
 #Sharks data base  
 User="Matias"
 source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R'))
+
+#controls
+Export.dat="YES"   #exporting size data for population dynamics
+do.paper=FALSE
 
 if(do.paper)
 {
@@ -44,7 +44,7 @@ if(do.paper)
   WA_Northern_Shark_2=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/NorthWestCoastShark_s43.shp"), layer="NorthWestCoastShark_s43") 
   SDGDLL_zone1=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/SDGDLL_zone1.shp"), layer="SDGDLL_zone1") 
   SDGDLL_zone2=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/SDGDLL_zone2.shp"), layer="SDGDLL_zone2") 
-  WCDGDLL=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/WCDGDLL.shp", layer="WCDGDLL") 
+  WCDGDLL=readOGR(handl_OneDrive("Data/Mapping/Shark_shape_files/WCDGDLL.shp"), layer="WCDGDLL") 
   
   Current.year=2016
 }
@@ -52,8 +52,7 @@ if(do.paper)
 
 
 
-
-#PROCEDURE SECTION
+# PROCEDURE SECTION-------------------------------------------------------------------------
 fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
 
 
@@ -91,8 +90,7 @@ if(do.paper)
   write.csv(DATA,handl_OneDrive("Analyses/Size and sex patterns/DATA.csv"),row.names=F)
 }
 
-
-#Extract data for pop din model and predict NA FL if TL available
+# Extract data for pop din model and predict NA FL if TL available-------------------------------------------------------------------------
 LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
 All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
 All.species.names=All.species.names%>%
@@ -107,7 +105,9 @@ Keep.species=c("copper shark","dusky shark","great hammerhead","grey nurse shark
 
 DATA.pop.din=DATA%>%
       filter(!BOAT%in%Res.vess)%>%
-      rename(SP=SPECIES)%>%
+      rename(SP=SPECIES,
+             LAT=Mid.Lat,
+             LONG=Mid.Long)%>%
       dplyr::select(SHEET_NO,SP,FL,TL,SEX,Month,year,BOAT,MESH_SIZE,Method,LAT,LONG,zone)%>%
       left_join(All.species.names%>%
                   dplyr::select(SPECIES,SNAME,SP),by='SP')%>%
@@ -213,7 +213,7 @@ if (Export.dat=="YES")
   
 }
 
-
+# Do analyses for spatial size paper-------------------------------------------------------------------------
 if(do.paper)
 {
   Table.soak=aggregate(SOAK.TIME~Method,DATA,mean,na.rm=T)
@@ -241,12 +241,11 @@ if(do.paper)
   
 }
 
-
-#Proportion of neonate duskies in commercial gillnet catch 
+# Proportion of neonate duskies in commercial gillnet catch-------------------------------------------------------------------------
 FL.dusky.neonate=82.5  #mid-point between max 0+ FL (93cm) and min 1+ FL (72cm) (Simpfendorfer et al 2002)
 Data.dusky=subset(DATA,Method=="GN" & MESH_SIZE%in%c("6.5","7") & SPECIES=="BW")
 Data.dusky$Finyear=factor(with(Data.dusky,ifelse(Month%in%1:6,
-            paste(year-1,"-",year,sep=""),ifelse(Month%in%7:12,paste(year,"-",year+1,sep=""),NA))),levels=FINYEARs)
+            paste(year-1,"-",year,sep=""),ifelse(Month%in%7:12,paste(year,"-",year+1,sep=""),NA))))
 TTa=with(subset(Data.dusky,!is.na(FL)),table(Finyear))
 names(TTa[which(TTa>20)])
 Data.dusky=subset(Data.dusky,Finyear%in%names(TTa[which(TTa>20)]))
@@ -306,7 +305,7 @@ dev.off()
 
 
 
-
+# Export outputs from spatial size distribution paper-------------------------------------------------------------------------
 if(do.paper)
 {
   setwd(handl_OneDrive("Analyses/Size and sex patterns"))
