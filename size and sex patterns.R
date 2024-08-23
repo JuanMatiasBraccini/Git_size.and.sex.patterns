@@ -10,11 +10,13 @@ library(vegan)
 library(ReporteRs)
 library(dplyr)
 library(Hmisc)
-
+library(tidyverse)
+library(patchwork)
 
 # DATA SECTION-------------------------------------------------------------------------
-
-if(!exists('handl_OneDrive')) source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+fn.user=function(x1,x2)paste(x1,Sys.getenv("USERNAME"),x2,sep='/')
+if(!exists('handl_OneDrive')) source(fn.user(x1='C:/Users',
+                                             x2='OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R'))
 
 #Sharks data base  
 User="Matias"
@@ -90,6 +92,8 @@ if(do.paper)
   write.csv(DATA,handl_OneDrive("Analyses/Size and sex patterns/DATA.csv"),row.names=F)
 }
 
+
+  
 # Extract data for pop din model and predict NA FL if TL available-------------------------------------------------------------------------
 LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
 All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
@@ -98,27 +102,52 @@ All.species.names=All.species.names%>%
   rename(SNAME=Name)
 
 Res.vess=c('FLIN','NAT',"HAM","HOU","RV BREAKSEA","RV Gannet","RV GANNET","RV SNIPE 2")
-Keep.species=c("copper shark","dusky shark","great hammerhead","grey nurse shark","gummy shark",
-               "lemon shark","milk shark","pigeye shark","sandbar shark","sawsharks",
-               "scalloped hammerhead","shortfin mako","smooth hammerhead","spinner shark",
-               "spurdogs","tiger shark","whiskery shark","wobbegongs")
+
+N.species.with.length=DATA%>%
+                        filter(!BOAT%in%Res.vess)%>%
+                        mutate(Length=ifelse(!is.na(FL)|!is.na(TL)|!is.na(PL),'Yes','No'))%>%
+                        filter(Length=='Yes')%>%
+                        group_by(COMMON_NAME,SCIENTIFIC_NAME)%>%
+                        tally()%>%
+                        arrange(COMMON_NAME)%>%
+                        data.frame%>%
+                        filter(n>50)%>%
+  mutate(COMMON_NAME=ifelse(COMMON_NAME=="Bronze whaler","Copper shark",COMMON_NAME))
+# Keep.species=c("angel sharks","copper shark","dusky shark","great hammerhead","grey nurse shark","gummy shark",
+#                "lemon shark","milk shark","pigeye shark","sandbar shark","sawsharks",
+#                "scalloped hammerhead","shortfin mako","smooth hammerhead","spinner shark",
+#                "spurdogs","tiger shark","whiskery shark","wobbegongs")
+Keep.species=sort(tolower(N.species.with.length$COMMON_NAME))
+Keep.species=ifelse(Keep.species=='southern eagle ray',"eagle ray",
+             ifelse(Keep.species=='port jackson',"port jackson shark",
+             ifelse(Keep.species=='fiddler ray',"southern fiddler ray",
+             ifelse(Keep.species=='eastern school shark',"school shark",
+             ifelse(Keep.species=='sawsharks',"common sawshark",
+             Keep.species)))))
+
+Species.with.no.fork.but.TL=c('ZE','FR','SH')  #species where FL cannot be measured
+Species.with.no.fork.but.DW=c('ER','SR')  #species where FL cannot be measured
 
 DATA.pop.din=DATA%>%
       filter(!BOAT%in%Res.vess)%>%
       rename(SP=SPECIES,
              LAT=Mid.Lat,
              LONG=Mid.Long)%>%
-      dplyr::select(SHEET_NO,SP,FL,TL,SEX,Month,year,BOAT,MESH_SIZE,Method,LAT,LONG,zone)%>%
+      dplyr::select(SHEET_NO,SP,FL,TL,PL,SEX,Month,year,BOAT,MESH_SIZE,Method,LAT,LONG,zone,BOTDEPTH)%>%
       left_join(All.species.names%>%
                   dplyr::select(SPECIES,SNAME,SP),by='SP')%>%
       left_join(LH%>%dplyr::select(SPECIES,a_FL.to.TL,b_FL.to.TL,Max.TL),
                 by="SPECIES")%>%
       mutate(FINYEAR=ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
                             paste(year-1,"-",fn.subs(year),sep="")),
-             FL=ifelse(is.na(FL),(TL-b_FL.to.TL)/a_FL.to.TL,FL))%>%
+             FL=ifelse(is.na(FL),(TL-b_FL.to.TL)/a_FL.to.TL,FL),
+             FL=ifelse(SP%in%Species.with.no.fork.but.TL,TL,FL),
+             FL=ifelse(SP%in%Species.with.no.fork.but.DW,PL,FL))%>%
       filter(!is.na(FL))%>%
-      filter(FL<Max.TL)%>%
-      mutate(SNAME=ifelse(SNAME=="common sawshark","sawsharks",SNAME),
+      mutate(dummy=ifelse(!is.na(Max.TL),Max.TL,1e4))%>%
+      filter(FL<dummy)%>%
+      mutate(SNAME=tolower(SNAME),
+             SNAME=ifelse(SNAME=="common sawshark","sawsharks",SNAME),
              MESH_SIZE=ifelse(MESH_SIZE=="10\"","10",
                        ifelse(MESH_SIZE=="6\"","6",
                        ifelse(MESH_SIZE=="5\r\n5","5",
@@ -128,19 +157,149 @@ DATA.pop.din=DATA%>%
                        ifelse(MESH_SIZE=="8\"","8",
                        MESH_SIZE))))))),
              MESH_SIZE=as.numeric(MESH_SIZE))%>%
-      filter(SNAME%in%Keep.species)
+      filter(SNAME%in%Keep.species)%>%
+      mutate(Size.type=ifelse(SP%in%Species.with.no.fork.but.TL,'TL',
+                       ifelse(SP%in%Species.with.no.fork.but.DW,'PL',
+                       "FL")))
+
+
+#Explore spatial structure  
+dis.species=sort(unique(DATA.pop.din$SNAME))
+do.dis=FALSE
+if(do.dis)
+{
+  Min.length.display=90
+  max.nrow=6
+  chunk2 <- function(x,n) split(x, cut(seq_along(x), n, labels = FALSE)) 
+  for(s in 1:length(dis.species))
+  {
+    NN=capitalize(dis.species[s])
+    dd1=DATA.pop.din%>%
+      filter(SNAME==dis.species[s] & !is.na(LAT))%>%
+      mutate(BLK.lat=as.numeric(substr(LAT,1,3)),
+             BLK.long=as.numeric(substr(LONG,1,3)),
+             BLK=paste0(abs(BLK.lat),(BLK.long-100)),
+             FL.group=10*(floor(FL/10)))
+    Levls=expand.grid(abs(max(dd1$BLK.lat)):abs(min(dd1$BLK.lat)),((min(dd1$BLK.long)-100):(max(dd1$BLK.long)-100)))%>%
+      mutate(BLK=paste0(Var1,Var2))%>%
+      arrange(Var1,Var2)
+    
+    
+    LAts=sort(unique(Levls$Var1))
+    Nrow=length(LAts)
+    if(length(LAts)<=max.nrow)
+    {
+      lat.list=list(LAts)
+    }else
+    {
+      lat.list=chunk2(LAts,ceiling(Nrow/max.nrow))
+    }
+    
+    for(xx in 1:length(lat.list))
+    {
+      print(paste('spatial length comp----',NN,"---latitudes ----",paste(lat.list[[xx]],collapse='_')))
+      dd2=dd1%>%
+        filter(BLK.lat%in%-lat.list[[xx]])
+      if(nrow(dd2)>Min.length.display)
+      {
+          Levls=expand.grid(abs(max(dd2$BLK.lat)):abs(min(dd2$BLK.lat)),((min(dd2$BLK.long)-100):(max(dd2$BLK.long)-100)))%>%
+          mutate(BLK=paste0(Var1,Var2))%>%
+          arrange(Var1,Var2)
+        Ncol=length(unique(Levls$Var2))
+        dd2=dd2%>%
+          filter(BLK%in%Levls$BLK)%>%
+          mutate(BLK=factor(BLK,levels=Levls$BLK))
+        
+        p=dd2%>%
+          group_by(BLK,FL.group)%>%
+          tally()%>%
+          ggplot(aes(FL.group,n))+
+          geom_bar(stat='identity')+
+          facet_wrap(~BLK,drop=FALSE,ncol=Ncol)+
+          theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8,hjust=1))+
+          ggtitle(NN)
+        print(p)
+        ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/",
+                                     NN,"_",paste(lat.list[[xx]],collapse = '_'),".tiff")),
+               width = 8,height = 8,compression = "lzw")
+      }
+     }
+    
+    
+  }
+}
+do.dis2=FALSE
+if(do.dis2)
+{
+  scale_values <- function(x,MIN,MAX){(x-MIN)/(MAX-MIN)}
+  for(s in 1:length(dis.species))
+  {
+    NN=capitalize(dis.species[s])
+    dd1=DATA.pop.din%>%
+      filter(SNAME==dis.species[s] & !is.na(LAT))%>%
+      mutate(BLK.lat=as.numeric(substr(LAT,1,3)),
+             BLK.long=as.numeric(substr(LONG,1,3)),
+             BLK.lat.bottom=BLK.lat-0.5,
+             BLK.lat.top=BLK.lat+0.5,
+             BLK.long.left=BLK.long-0.5,
+             BLK.long.right=BLK.long+0.5,
+             BLK=paste0(abs(BLK.lat),(BLK.long-100)),
+             FL.group=10*(floor(FL/10)),
+             scaled.lat.bottom=scale_values(BLK.lat.bottom,MIN=min(BLK.lat),MAX=max(BLK.lat)),
+             scaled.long.left=scale_values(BLK.long.left,MIN=min(BLK.long),MAX=max(BLK.long)),
+             scaled.lat.top=scale_values(BLK.lat.top,MIN=min(BLK.lat),MAX=max(BLK.lat)),
+             scaled.long.right=scale_values(BLK.long.right,MIN=min(BLK.long),MAX=max(BLK.long)))
+    
+    p=dd1%>%ggplot(aes(LONG,LAT))
+    hists=dd1%>%group_by(BLK.lat,BLK.long,BLK,scaled.long.left,scaled.lat.bottom,
+                         scaled.long.right,scaled.lat.top,FL.group)%>%tally()
+    
+    unik.blok=sort(unique(hists$BLK))
+    for(x in 1:length(unik.blok))
+    {
+      b=hists%>%filter(BLK==unik.blok[x])
+      p=p+
+        inset_element(p=b%>%ggplot(aes(FL.group,n))+geom_bar(stat='identity'),
+                      left=unique(b$scaled.long.left),
+                      bottom=unique(b$scaled.lat.bottom),
+                      right=unique(b$scaled.long.right),
+                      top=unique(b$scaled.lat.top))
+    }  
+    
+  }
+}
 
 
 #Export size frequency other gears data for population dynamics modelling
 if (Export.dat=="YES")
 {
   hndl=handl_OneDrive('Analyses/Data_outs/')
-  for(s in 1:length(Keep.species))
+  for(s in 1:length(dis.species))
   {
-    dd1=DATA.pop.din%>%filter(SNAME==Keep.species[s])
-    NN=capitalize(Keep.species[s])
+    dd1=DATA.pop.din%>%filter(SNAME==dis.species[s])
+    NN=capitalize(dis.species[s])
+    if(NN=="Angel sharks") NN="Australian angelshark"
     if(nrow(dd1)>0)
     {
+      #Observations (TDGDLF & NSF)
+      Observations=dd1%>%
+        filter(!is.na(FL))%>%
+        mutate(Keep=ifelse((Method=='LL' & LAT>=(-25)) | (Method=='GN' & LAT<(-25)),'Yes','No'))%>%
+        filter(Keep=='Yes')
+      N.obs=Observations%>%
+        group_by(FINYEAR,Method,zone,SPECIES)%>%
+        tally()%>%
+        rename(N.observations=n)
+      N.shots=Observations%>%
+        distinct(SHEET_NO,.keep_all = T)%>%
+        group_by(FINYEAR,Method,zone,SPECIES)%>%
+        tally()%>%
+        rename(N.shots=n)
+      write.csv(full_join(N.shots,N.obs,by=c('FINYEAR','Method','zone','SPECIES')),
+                paste(hndl,NN,'/',NN,"_Size_composition_Observations.csv",sep=''),row.names=F)
+      
+      
+       #Data
       gn=dd1%>%filter(Method=="GN" & LAT<(-25))
       if(nrow(gn)>0)
       {
@@ -150,41 +309,41 @@ if (Export.dat=="YES")
         {
           nm=zn[x]
           a=gn%>%filter(zone==zn[x])
-          a_6.5=subset(a,!is.na(FL) & MESH_SIZE=="6.5",select=c(Month,FINYEAR,year,FL,SEX))
-          a_7=subset(a,!is.na(FL) & MESH_SIZE=="7",select=c(Month,FINYEAR,year,FL,SEX))
+          a_6.5=subset(a,!is.na(FL) & MESH_SIZE=="6.5",select=c(Month,FINYEAR,year,FL,SEX,Size.type))
+          a_7=subset(a,!is.na(FL) & MESH_SIZE=="7",select=c(Month,FINYEAR,year,FL,SEX,Size.type))
           if(nrow(a_6.5)>0)write.csv(a_6.5,paste(hndl,'/',NN,'/',NN,"_Size_composition_",nm,".6.5.inch.raw.csv",sep=""),row.names=F)
           if(nrow(a_7)>0)write.csv(a_7,paste(hndl,'/',NN,'/',NN,"_Size_composition_",nm,".7.inch.raw.csv",sep=""),row.names=F)
         }
         
         #table of observations
-        fn.table.shots=function(dat,SP)
-        {
-          zn=unique(dat$zone)
-          b=vector('list',length(zn))
-          for(x in 1:length(zn))
-          {
-            a=gn%>%filter(zone==zn[x] & !is.na(FL))
-            a$Number=1
-            Obs=aggregate(Number~FINYEAR,a,sum)
-            a$Dup=paste(a$year,a$Month,a$SHEET_NO)
-            bb=a[!duplicated(a$Dup),]
-            bb$Number=1
-            Shots=aggregate(Number~FINYEAR,bb,sum)
-            this=merge(Obs,Shots,by="FINYEAR")
-            names(this)[2:3]=c("N.observations","N.shots")
-            this$Species=unique(a$SPECIES)
-            this$Fishery="TDGDLF"
-            this$zone=zn[x]
-            b[[x]]=this
-          }
-          write.csv(do.call(rbind,b),paste(hndl,'/',SP,'/',SP,"_Size_composition_Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
-        }
-        fn.table.shots(dat=gn,SP=NN)
+        # fn.table.shots=function(dat,SP)
+        # {
+        #   zn=unique(dat$zone)
+        #   b=vector('list',length(zn))
+        #   for(x in 1:length(zn))
+        #   {
+        #     a=gn%>%filter(zone==zn[x] & !is.na(FL))
+        #     a$Number=1
+        #     Obs=aggregate(Number~FINYEAR,a,sum)
+        #     a$Dup=paste(a$year,a$Month,a$SHEET_NO)
+        #     bb=a[!duplicated(a$Dup),]
+        #     bb$Number=1
+        #     Shots=aggregate(Number~FINYEAR,bb,sum)
+        #     this=merge(Obs,Shots,by="FINYEAR")
+        #     names(this)[2:3]=c("N.observations","N.shots")
+        #     this$Species=unique(a$SPECIES)
+        #     this$Fishery="TDGDLF"
+        #     this$zone=zn[x]
+        #     b[[x]]=this
+        #   }
+        #   write.csv(do.call(rbind,b),paste(hndl,'/',SP,'/',SP,"_Size_composition_Numb_obs_size.freq.TDGDLF.csv",sep=""),row.names=F)
+        # }
+        # fn.table.shots(dat=gn,SP=NN)
       }
       ll=dd1%>%filter(Method=="LL" & LAT>=(-25)) 
       if(nrow(ll)>0)
       {
-        ll=ll%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        ll=ll%>%dplyr::select(Month,FINYEAR,year,FL,SEX,Size.type)
         write.csv(ll,paste(hndl,NN,'/',NN,
                            "_Size_composition_NSF.LONGLINE.csv",sep=''),row.names=F)
         
@@ -192,14 +351,14 @@ if (Export.dat=="YES")
       dl=dd1%>%filter(Method=="DL") 
       if(nrow(dl)>0)
       {
-        dl=dl%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        dl=dl%>%dplyr::select(Month,FINYEAR,year,FL,SEX,Size.type)
         write.csv(dl,paste(hndl,NN,'/',NN,
                            "_Size_composition_dropline.csv",sep=''),row.names=F)
       }
       tr=dd1%>%filter(Method=="TW") 
       if(nrow(tr)>0)
       {
-        tr=tr%>%dplyr::select(Month,FINYEAR,year,FL,SEX)
+        tr=tr%>%dplyr::select(Month,FINYEAR,year,FL,SEX,Size.type)
         write.csv(tr,paste(hndl,NN,'/',NN,
                            "_Size_composition_Pilbara_Trawl.csv",sep=''),row.names=F)
       }
