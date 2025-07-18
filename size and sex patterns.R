@@ -7,7 +7,7 @@ data(worldLLhigh)
 library(plotrix)
 library(lme4) #mixed models
 library(vegan)
-library(ReporteRs)
+#library(ReporteRs)
 library(dplyr)
 library(Hmisc)
 library(tidyverse)
@@ -93,8 +93,8 @@ if(do.paper)
 }
 
 
-  
-# Extract data for pop din model and predict NA FL if TL available-------------------------------------------------------------------------
+
+# Peredict NA FL if TL available-------------------------------------------------------------------------
 LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
 All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
 All.species.names=All.species.names%>%
@@ -128,15 +128,14 @@ Keep.species=ifelse(Keep.species=='southern eagle ray',"eagle ray",
 Species.with.no.fork.but.TL=c('ZE','FR','SH')  #species where FL cannot be measured
 Species.with.no.fork.but.DW=c('ER','SR')  #species where FL cannot be measured
 
-DATA.pop.din=DATA%>%
-      filter(!BOAT%in%Res.vess)%>%
+DATA=DATA%>%
       rename(SP=SPECIES,
              LAT=Mid.Lat,
              LONG=Mid.Long)%>%
       dplyr::select(SHEET_NO,SP,FL,TL,PL,SEX,Month,year,BOAT,MESH_SIZE,Method,LAT,LONG,zone,BOTDEPTH)%>%
       left_join(All.species.names%>%
                   dplyr::select(SPECIES,SNAME,SP),by='SP')%>%
-      left_join(LH%>%dplyr::select(SPECIES,a_FL.to.TL,b_FL.to.TL,Max.TL),
+      left_join(LH%>%dplyr::select(SPECIES,a_FL.to.TL,b_FL.to.TL,Max.TL,LF_o),
                 by="SPECIES")%>%
       mutate(FINYEAR=ifelse(Month>6,paste(year,"-",fn.subs(year+1),sep=""),
                             paste(year-1,"-",fn.subs(year),sep="")),
@@ -162,8 +161,46 @@ DATA.pop.din=DATA%>%
                        ifelse(SP%in%Species.with.no.fork.but.DW,'PL',
                        "FL")))
 
+# Extract data for pop din model -------------------------------------------------------------------------
+DATA.pop.din=DATA%>%
+  filter(!BOAT%in%Res.vess)
 
-#Explore spatial structure  
+
+# Explore spatial structure -------------------------------------------------------------------------
+colfunc <- colorRampPalette(c("yellow", "red"))
+#Spatial patterns by month
+fun.spatial.month=function(sp)
+{
+  d=DATA%>%
+      filter(SP==sp)%>%
+    filter(FL>LF_o)%>%
+    filter(!is.na(LAT))%>%
+    mutate(Size=25*round(FL/25),
+           LAT=round(LAT,1),
+           LONG=round(LONG,1))%>%
+    group_by(Month,SEX,Size,LAT,LONG)%>%
+    tally()
+  unik.size=sort(unique(d$Size))
+  CLs=colfunc(length(unik.size))
+    names(CLs)=unik.size
+  p=d%>%
+    mutate(Size=factor(Size,levels=unik.size))%>%
+    ggplot(aes(LONG,LAT,color=Size,size=n))+
+    geom_point()+
+    facet_wrap(~Month)+
+    scale_color_manual(values = CLs)
+  return(p)
+}
+check.this=c('TK','BW')
+for(i in 1:length(check.this))
+{
+  NM=check.this[i]
+  fun.spatial.month(sp=NM)
+  ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_by month_",NM,".tiff")),
+         width = 8,height = 8,compression = "lzw")
+}
+
+
 dis.species=sort(unique(DATA.pop.din$SNAME))
 do.dis=FALSE
 if(do.dis)
@@ -363,6 +400,8 @@ if (Export.dat=="YES")
                            "_Size_composition_Pilbara_Trawl.csv",sep=''),row.names=F)
       }
       rm(gn,ll,tr,dl)
+      
+      print(paste('----Exporting length composition for ----------',NN))
     }
   }
 
