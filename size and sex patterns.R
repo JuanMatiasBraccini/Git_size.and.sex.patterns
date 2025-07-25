@@ -51,8 +51,11 @@ if(do.paper)
   Current.year=2016
 }
 
+source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/ggplot.themes.R'))  #my themes
 
-
+Bathymetry_120=read.table(handl_OneDrive("Data/Mapping/get_data112_120.cgi"))
+Bathymetry_138=read.table(handl_OneDrive("Data/Mapping/get_data120.05_138.cgi"))
+Bathymetry=rbind(Bathymetry_120,Bathymetry_138)
 
 # PROCEDURE SECTION-------------------------------------------------------------------------
 fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
@@ -94,7 +97,7 @@ if(do.paper)
 
 
 
-# Peredict NA FL if TL available-------------------------------------------------------------------------
+# Predict NA FL if TL available-------------------------------------------------------------------------
 LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
 All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
 All.species.names=All.species.names%>%
@@ -165,10 +168,63 @@ DATA=DATA%>%
 DATA.pop.din=DATA%>%
   filter(!BOAT%in%Res.vess)
 
+dis.species=sort(unique(DATA.pop.din$SNAME))
 
 # Explore spatial structure -------------------------------------------------------------------------
-colfunc <- colorRampPalette(c("yellow", "red"))
+# Spatial distribution of pop dyn data by zone and mesh
+Check.this.sp=with(DATA.pop.din%>%filter(!is.na(LONG))%>%
+                     filter(!is.na(BOAT))%>%
+                     filter(Method=='GN')%>%        #select gillnet only
+                     filter(MESH_SIZE%in%c(6.5,7)),table(SPECIES))
+Check.this.sp=Check.this.sp[Check.this.sp>200]
+fn.spatio.temp.for.SS=function(SPe)
+{
+  d=DATA.pop.din%>%
+    filter(SPECIES==SPe)%>%
+    filter(!is.na(LONG))%>%
+    filter(!is.na(BOAT))%>%
+    filter(Method=='GN')%>%        #select gillnet only
+    filter(MESH_SIZE%in%c(6.5,7))  #select only 6.5 and 7 inch mesh data (same as fleet)
+  Zn=table(d$zone)
+  Zn=Zn[Zn>50]
+  if(length(Zn)>0)
+  {
+    Zn=names(Zn)
+    NM=unique(d$SNAME)
+    
+    for(z in 1:length(Zn))
+    {
+      d1=d%>%
+        filter(zone==Zn[z])%>%
+        mutate(BOAT_mesh=paste(BOAT,MESH_SIZE,sep='-'))%>%
+        group_by(LAT,LONG,year,BOAT_mesh)%>%
+        tally()
+      Limx=range(d1$LONG,na.rm=T)
+      Limy= range(d1$LAT,na.rm=T) 
+      
+      
+      p=d1%>%
+        ggplot(aes(LONG,LAT,size=n,col=BOAT_mesh))+
+        facet_wrap(~year)+
+        xlim(Limx)+
+        ggtitle(Zn[z])+
+        theme_PA()+theme(legend.position = 'top')+
+        geom_point(alpha=0.7)+
+        geom_contour(data = Bathymetry%>%filter(V1>=Limx[1] & V1<=Limx[2] & V2>=Limy[1] & V2<=Limy[2])%>%
+                       rename(LONG=V1,LAT=V2)%>%mutate(n=1,BOAT=unique(d1$BOAT_mesh[1])),
+                     aes(LONG, LAT, z=V3),breaks=c(-50,-100,-200,-500),linetype="solid",colour="grey70",alpha=0.6)
+      print(p)
+      ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/Pop din_spatial_",
+                                   paste(NM,Zn[z],sep='_'),".tiff")),
+             width = 10,height = 8,compression = "lzw")
+    }
+  }
+}
+for(s in 1:length(Check.this.sp)) fn.spatio.temp.for.SS(SPe=names(Check.this.sp)[s])
+
+
 #Spatial patterns by month
+colfunc <- colorRampPalette(c("yellow", "blue"))
 fun.spatial.month=function(sp)
 {
   d=DATA%>%
@@ -186,7 +242,7 @@ fun.spatial.month=function(sp)
   p=d%>%
     mutate(Size=factor(Size,levels=unik.size))%>%
     ggplot(aes(LONG,LAT,color=Size,size=n))+
-    geom_point()+
+    geom_point(alpha=0.8)+
     facet_wrap(~Month)+
     scale_color_manual(values = CLs)
   return(p)
@@ -196,12 +252,10 @@ for(i in 1:length(check.this))
 {
   NM=check.this[i]
   fun.spatial.month(sp=NM)
-  ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_by month_",NM,".tiff")),
+  ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/spatial_length_by month_",NM,".tiff")),
          width = 8,height = 8,compression = "lzw")
 }
 
-
-dis.species=sort(unique(DATA.pop.din$SNAME))
 do.dis=FALSE
 if(do.dis)
 {
@@ -321,7 +375,7 @@ if (Export.dat=="YES")
       #Observations (TDGDLF & NSF)
       Observations=dd1%>%
         filter(!is.na(FL))%>%
-        mutate(Keep=ifelse((Method=='LL' & LAT>=(-25)) | (Method=='GN' & LAT<(-25)),'Yes','No'))%>%
+        mutate(Keep=ifelse((Method=='LL' & LAT>=(-25)) | (Method=='GN'& MESH_SIZE%in%c(6.5,7) & LAT<(-25)),'Yes','No'))%>%
         filter(Keep=='Yes')
       N.obs=Observations%>%
         group_by(FINYEAR,Method,zone,SPECIES)%>%
