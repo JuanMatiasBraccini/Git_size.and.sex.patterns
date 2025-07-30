@@ -12,6 +12,7 @@ library(dplyr)
 library(Hmisc)
 library(tidyverse)
 library(patchwork)
+library(ggrepel)
 
 # DATA SECTION-------------------------------------------------------------------------
 fn.user=function(x1,x2)paste(x1,Sys.getenv("USERNAME"),x2,sep='/')
@@ -171,90 +172,202 @@ DATA.pop.din=DATA%>%
 dis.species=sort(unique(DATA.pop.din$SNAME))
 
 # Explore spatial structure -------------------------------------------------------------------------
-# Spatial distribution of pop dyn data by zone and mesh
-Check.this.sp=with(DATA.pop.din%>%filter(!is.na(LONG))%>%
-                     filter(!is.na(BOAT))%>%
-                     filter(Method=='GN')%>%        #select gillnet only
-                     filter(MESH_SIZE%in%c(6.5,7)),table(SPECIES))
-Check.this.sp=Check.this.sp[Check.this.sp>200]
-fn.spatio.temp.for.SS=function(SPe)
+# Spatial distribution of pop dyn data 
+do.dis=FALSE
+if(do.dis)
 {
-  d=DATA.pop.din%>%
-    filter(SPECIES==SPe)%>%
-    filter(!is.na(LONG))%>%
-    filter(!is.na(BOAT))%>%
-    filter(Method=='GN')%>%        #select gillnet only
-    filter(MESH_SIZE%in%c(6.5,7))  #select only 6.5 and 7 inch mesh data (same as fleet)
-  Zn=table(d$zone)
-  Zn=Zn[Zn>50]
-  if(length(Zn)>0)
+  Check.this.sp=with(DATA.pop.din%>%filter(!is.na(LONG))%>%
+                       filter(!is.na(BOAT))%>%
+                       filter(Method=='GN')%>%        #select gillnet only
+                       filter(MESH_SIZE%in%c(6.5,7)),table(SPECIES))
+  Check.this.sp=Check.this.sp[Check.this.sp>200]
+  
+  #by zone and mesh
+  fn.spatio.temp.for.SS=function(SPe)
   {
-    Zn=names(Zn)
-    NM=unique(d$SNAME)
-    
-    for(z in 1:length(Zn))
+    d=DATA.pop.din%>%
+      filter(SPECIES==SPe)%>%
+      filter(!is.na(LONG))%>%
+      filter(!is.na(BOAT))%>%
+      filter(Method=='GN')%>%        #select gillnet only
+      filter(MESH_SIZE%in%c(6.5,7))  #select only 6.5 and 7 inch mesh data (same as fleet)
+    Zn=table(d$zone)
+    Zn=Zn[Zn>50]
+    if(length(Zn)>0)
     {
-      d1=d%>%
-        filter(zone==Zn[z])%>%
-        mutate(BOAT_mesh=paste(BOAT,MESH_SIZE,sep='-'))%>%
-        group_by(LAT,LONG,year,BOAT_mesh)%>%
-        tally()
-      Limx=range(d1$LONG,na.rm=T)
-      Limy= range(d1$LAT,na.rm=T) 
+      Zn=names(Zn)
+      NM=unique(d$SNAME)
       
-      
-      p=d1%>%
-        ggplot(aes(LONG,LAT,size=n,col=BOAT_mesh))+
-        facet_wrap(~year)+
-        xlim(Limx)+
-        ggtitle(Zn[z])+
-        theme_PA()+theme(legend.position = 'top')+
-        geom_point(alpha=0.7)+
-        geom_contour(data = Bathymetry%>%filter(V1>=Limx[1] & V1<=Limx[2] & V2>=Limy[1] & V2<=Limy[2])%>%
-                       rename(LONG=V1,LAT=V2)%>%mutate(n=1,BOAT=unique(d1$BOAT_mesh[1])),
-                     aes(LONG, LAT, z=V3),breaks=c(-50,-100,-200,-500),linetype="solid",colour="grey70",alpha=0.6)
-      print(p)
-      ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/Pop din_spatial_",
-                                   paste(NM,Zn[z],sep='_'),".tiff")),
-             width = 10,height = 8,compression = "lzw")
+      for(z in 1:length(Zn))
+      {
+        d1=d%>%
+          filter(zone==Zn[z])%>%
+          mutate(BOAT_mesh=paste(BOAT,MESH_SIZE,sep='-'))%>%
+          group_by(LAT,LONG,year,BOAT_mesh)%>%
+          tally()
+        Limx=range(d1$LONG,na.rm=T)
+        Limy= range(d1$LAT,na.rm=T) 
+        
+        
+        p=d1%>%
+          ggplot(aes(LONG,LAT,size=n,col=BOAT_mesh))+
+          facet_wrap(~year)+
+          xlim(Limx)+
+          ggtitle(Zn[z])+
+          theme_PA()+theme(legend.position = 'top')+
+          geom_point(alpha=0.7)+
+          geom_contour(data = Bathymetry%>%filter(V1>=Limx[1] & V1<=Limx[2] & V2>=Limy[1] & V2<=Limy[2])%>%
+                         rename(LONG=V1,LAT=V2)%>%mutate(n=1,BOAT=unique(d1$BOAT_mesh[1])),
+                       aes(LONG, LAT, z=V3),breaks=c(-50,-100,-200,-500),linetype="solid",colour="grey70",alpha=0.6)
+        print(p)
+        ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/Pop din_spatial_",
+                                     paste(NM,Zn[z],sep='_'),".tiff")),
+               width = 10,height = 8,compression = "lzw")
+      }
     }
   }
-}
-for(s in 1:length(Check.this.sp)) fn.spatio.temp.for.SS(SPe=names(Check.this.sp)[s])
-
-
-#Spatial patterns by month
-colfunc <- colorRampPalette(c("yellow", "blue"))
-fun.spatial.month=function(sp)
-{
-  d=DATA%>%
+  for(s in 1:length(Check.this.sp)) fn.spatio.temp.for.SS(SPe=names(Check.this.sp)[s])
+  
+  #by Sex
+  colfunc <- colorRampPalette(c("pink",'grey', "blue"))
+  fn.spatio.temp_sex.for.SS=function(SPe)
+  {
+    d=DATA.pop.din%>%
+      filter(SPECIES==SPe)%>%
+      filter(!is.na(LONG))%>%
+     # filter(!is.na(BOAT))%>%
+     # filter(Method=='GN')%>%        #select gillnet only
+    #  filter(MESH_SIZE%in%c(6.5,7))%>%  #select only 6.5 and 7 inch mesh data (same as fleet)
+      filter(!is.na(SEX))
+    
+    NM=unique(d$SNAME)
+    d1=d%>%
+      mutate(SEX=ifelse(SEX=='F','Female','Male'),
+             LAT=round(LAT),
+             LONG=round(LONG))%>%
+      group_by(LAT,LONG,SEX)%>%
+      tally()%>%
+      ungroup()%>%
+      spread(SEX,n,fill=0)%>%
+      mutate(N=Female+Male,
+             Prop.male=Male/N)%>%
+      filter(N>=5)%>%
+      mutate(Prop.male1=as.character(round(Prop.male,1)),
+             Prop.male1=ifelse(Prop.male1==0,0.01,Prop.male1))
+    
+    if(nrow(d1)>10)
+    {
+      Limx=range(d1$LONG,na.rm=T)
+      Limy= range(d1$LAT,na.rm=T) 
+      Kl.rnge=sort(unique(d1$Prop.male1))
+      Kls=colfunc(length(Kl.rnge))
+      names(Kls)=Kl.rnge
+      p=d1%>%
+        mutate(Prop.male1=factor(Prop.male1,levels=Kl.rnge))%>%
+        ggplot(aes(LONG,LAT,color=Prop.male1))+
+        xlim(Limx)+ylim(Limy)+
+        ggtitle('Proportion males')+
+        theme_PA()+theme(legend.position = 'none')+
+        geom_contour(data = Bathymetry%>%filter(V1>=Limx[1] & V1<=Limx[2] & V2>=Limy[1] & V2<=Limy[2])%>%
+                       rename(LONG=V1,LAT=V2)%>%mutate(N=0.01,Prop.male=0.001),
+                     aes(LONG, LAT, z=V3),breaks=c(-50,-100,-200,-500),linetype="solid",colour="grey70",alpha=0.6)+
+        geom_point(size=5)+
+        scale_color_manual(values = Kls)+
+        geom_text_repel(aes(label = Prop.male1),box.padding = 0.5)
+      print(p)
+      ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_sex_comp/Pop din_spatial_sex_",
+                                   NM,".tiff")),
+             width = 8,height = 8,compression = "lzw")
+      do.zone=FALSE
+      if(do.zone)
+      {
+        Zn=table(d$zone)
+        Zn=Zn[Zn>50]
+        if(length(Zn)>0)
+        {
+          Zn=names(Zn)
+          NM=unique(d$SNAME)
+          
+          for(z in 1:length(Zn))
+          {
+            d1=d%>%
+              filter(zone==Zn[z])%>%
+              mutate(SEX=ifelse(SEX=='F','Female','Male'))%>%
+              group_by(LAT,LONG,SEX)%>%
+              tally()%>%
+              ungroup()%>%
+              spread(SEX,n)%>%
+              mutate(N=Female+Male,
+                     Prop.male=Male/N)%>%
+              filter(N>=10)%>%
+              mutate(Prop.male1=as.character(round(Prop.male,1)))
+            
+            Limx=range(d1$LONG,na.rm=T)
+            Limy= range(d1$LAT,na.rm=T) 
+            
+            Kl.rnge=sort(unique(d1$Prop.male1))
+            Kls=colfunc(length(Kl.rnge))
+            names(Kls)=Kl.rnge
+            p=d1%>%
+              mutate(Prop.male1=factor(Prop.male1,levels=Kl.rnge))%>%
+              ggplot(aes(LONG,LAT,size=Prop.male,color=Prop.male1))+
+              xlim(Limx)+
+              ggtitle(paste(Zn[z],'=Proportion males'))+
+              theme_PA()+theme(legend.position = 'top')+
+              geom_point(alpha=0.9)+
+              geom_contour(data = Bathymetry%>%filter(V1>=Limx[1] & V1<=Limx[2] & V2>=Limy[1] & V2<=Limy[2])%>%
+                             rename(LONG=V1,LAT=V2)%>%mutate(N=0.1,Prop.male=0.01),
+                           aes(LONG, LAT, z=V3),breaks=c(-50,-100,-200,-500),linetype="solid",colour="grey70",alpha=0.6)+
+              scale_color_manual(values = Kls)
+            print(p)
+            ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_sex_comp/Pop din_spatial_sex_",
+                                         paste(NM,Zn[z],sep='_'),".tiff")),
+                   width = 10,height = 8,compression = "lzw")
+          }
+        }
+      }
+      
+    }
+    
+  }
+  for(s in 1:length(Check.this.sp)) fn.spatio.temp_sex.for.SS(SPe=names(Check.this.sp)[s])
+  
+  
+  #Spatial patterns by month
+  colfunc <- colorRampPalette(c("yellow", "blue"))
+  fun.spatial.month=function(sp)
+  {
+    d=DATA%>%
       filter(SP==sp)%>%
-    filter(FL>LF_o)%>%
-    filter(!is.na(LAT))%>%
-    mutate(Size=25*round(FL/25),
-           LAT=round(LAT,1),
-           LONG=round(LONG,1))%>%
-    group_by(Month,SEX,Size,LAT,LONG)%>%
-    tally()
-  unik.size=sort(unique(d$Size))
-  CLs=colfunc(length(unik.size))
+      filter(FL>LF_o)%>%
+      filter(!is.na(LAT))%>%
+      mutate(Size=25*round(FL/25),
+             LAT=round(LAT,1),
+             LONG=round(LONG,1))%>%
+      group_by(Month,SEX,Size,LAT,LONG)%>%
+      tally()
+    unik.size=sort(unique(d$Size))
+    CLs=colfunc(length(unik.size))
     names(CLs)=unik.size
-  p=d%>%
-    mutate(Size=factor(Size,levels=unik.size))%>%
-    ggplot(aes(LONG,LAT,color=Size,size=n))+
-    geom_point(alpha=0.8)+
-    facet_wrap(~Month)+
-    scale_color_manual(values = CLs)
-  return(p)
+    p=d%>%
+      mutate(Size=factor(Size,levels=unik.size))%>%
+      ggplot(aes(LONG,LAT,color=Size,size=n))+
+      geom_point(alpha=0.8)+
+      facet_wrap(~Month)+
+      scale_color_manual(values = CLs)
+    return(p)
+  }
+  check.this=c('TK','BW')
+  for(i in 1:length(check.this))
+  {
+    NM=check.this[i]
+    fun.spatial.month(sp=NM)
+    ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/spatial_length_by month_",NM,".tiff")),
+           width = 8,height = 8,compression = "lzw")
+  }
+  
 }
-check.this=c('TK','BW')
-for(i in 1:length(check.this))
-{
-  NM=check.this[i]
-  fun.spatial.month(sp=NM)
-  ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/spatial_length_by month_",NM,".tiff")),
-         width = 8,height = 8,compression = "lzw")
-}
+
 
 do.dis=FALSE
 if(do.dis)
