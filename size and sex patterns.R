@@ -228,6 +228,59 @@ if(do.dis)
   }
   for(s in 1:length(Check.this.sp)) fn.spatio.temp.for.SS(SPe=names(Check.this.sp)[s])
   
+  #by zone and mesh -histogram
+  fn.spatio.temp_hist.for.SS=function(SPe)
+  {
+    d=DATA.pop.din%>%
+      filter(SPECIES==SPe)%>%
+      filter(!is.na(LONG))%>%
+      filter(!is.na(BOAT))%>%
+      filter(!is.na(SEX))%>%
+      filter(zone%in%c('West','Zone1','Zone2'))%>%
+      filter(Method=='GN')%>%        #select gillnet only
+      filter(MESH_SIZE%in%c(6.5,7))  #select only 6.5 and 7 inch mesh data (same as fleet)
+    
+    d.NSF=DATA.pop.din%>%
+      filter(SPECIES==SPe)%>%
+      filter(!is.na(LONG))%>%
+      filter(!is.na(BOAT))%>%
+      filter(!is.na(SEX))%>%
+      filter(zone%in%c('North'))%>%
+      filter(Method=='LL')%>%
+      mutate(MESH_SIZE='LL')
+    
+    d=rbind(d,d.NSF)%>%
+      mutate(TL=ifelse(is.na(TL),a_FL.to.TL*FL+b_FL.to.TL,TL))
+    Zn=table(d$zone)
+    Zn=Zn[Zn>50]
+    if(length(Zn)>0)
+    {
+      NM=unique(d$SNAME)
+      p=d%>%
+        mutate(year=as.numeric(substr(FINYEAR,1,4)),
+               Mesh.sex=paste(MESH_SIZE,SEX),
+               TL.bin=10*floor(TL/10))%>%
+        group_by(Mesh.sex,TL.bin,zone,year)%>%
+        tally()%>%ungroup()
+      DRoP=p%>%group_by(zone,year)%>%summarise(n=sum(n))%>%filter(n<10)%>%mutate(drop=paste(zone,year))
+      p=p%>%
+        mutate(drop=paste(zone,year))%>%
+        filter(!drop%in%DRoP$drop)%>%
+        ggplot(aes(TL.bin,n,color=Mesh.sex))+
+        geom_line()+
+        facet_grid(year~zone)+
+        theme_PA(str.siz=9,axs.t.siz=7)+theme(legend.title=element_blank(),legend.position = 'top')+
+        xlab('TL (cm)')+ guides(colour = guide_legend(nrow = 1))
+      
+      print(p)
+      ggsave(handl_OneDrive(paste0("Analyses/Size and sex patterns/spatial_length_comp/Pop din_spatial_",NM,"_histogram.tiff")),
+             width = 6,height = 7,compression = "lzw")
+      
+      
+    }
+  }
+  for(s in 1:length(Check.this.sp)) fn.spatio.temp_hist.for.SS(SPe=names(Check.this.sp)[s])
+  
   #by Sex
   colfunc <- colorRampPalette(c("pink",'grey', "blue"))
   fn.spatio.temp_sex.for.SS=function(SPe)
