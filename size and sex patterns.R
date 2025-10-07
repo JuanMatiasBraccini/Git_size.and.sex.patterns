@@ -58,6 +58,13 @@ Bathymetry_120=read.table(handl_OneDrive("Data/Mapping/get_data112_120.cgi"))
 Bathymetry_138=read.table(handl_OneDrive("Data/Mapping/get_data120.05_138.cgi"))
 Bathymetry=rbind(Bathymetry_120,Bathymetry_138)
 
+#Life history
+LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
+All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
+
+
+
+
 # PROCEDURE SECTION-------------------------------------------------------------------------
 fn.subs=function(YEAR) substr(YEAR,start=3,stop=4)
 
@@ -99,8 +106,6 @@ if(do.paper)
 
 
 # Predict NA FL if TL available-------------------------------------------------------------------------
-LH=read.csv(handl_OneDrive('Data/Life history parameters/Life_History.csv'))
-All.species.names=read.csv(handl_OneDrive("Data/Species_names_shark.only.csv"))
 All.species.names=All.species.names%>%
   mutate(Name=tolower(Name))%>%
   rename(SNAME=Name)
@@ -168,6 +173,14 @@ DATA=DATA%>%
 # Extract data for pop din model -------------------------------------------------------------------------
 DATA.pop.din=DATA%>%
   filter(!BOAT%in%Res.vess)
+
+#remove records larger than TL_MAX       
+DATA.pop.din=DATA.pop.din%>%
+                mutate(TL1=FL*a_FL.to.TL+b_FL.to.TL,
+                       dummy=paste(SHEET_NO,SP,FL,SEX,TL1))
+dd_large=DATA.pop.din%>%filter(TL1>Max.TL)
+DATA.pop.din=DATA.pop.din%>%filter(!dummy%in%dd_large$dummy)%>%
+  dplyr::select(-c(dummy,TL1))
 
 dis.species=sort(unique(DATA.pop.din$SNAME))
 
