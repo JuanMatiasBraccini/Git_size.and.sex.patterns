@@ -568,6 +568,11 @@ if (Export.dat=="YES")
       write.csv(full_join(N.shots,N.obs,by=c('FINYEAR','Method','zone','SPECIES')),
                 paste(hndl,NN,'/',NN,"_Size_composition_Observations.csv",sep=''),row.names=F)
       
+      #Meta data
+      write.csv(dd1%>%
+                  group_by(BOAT,FINYEAR,MESH_SIZE,Method,zone,LAT,LONG,BOTDEPTH)%>%
+                  tally(),
+                paste(hndl,NN,'/',NN,"_Lengthcomps_metadata.csv",sep=''),row.names=F)
       
        #Data
       gn=dd1%>%filter(Method=="GN" & LAT<(-25))
@@ -610,6 +615,7 @@ if (Export.dat=="YES")
         # }
         # fn.table.shots(dat=gn,SP=NN)
       }
+      
       ll=dd1%>%filter(Method=="LL" & LAT>=(-25)) 
       if(nrow(ll)>0)
       {
@@ -618,6 +624,7 @@ if (Export.dat=="YES")
                            "_Size_composition_NSF.LONGLINE.csv",sep=''),row.names=F)
         
       }
+      
       dl=dd1%>%filter(Method=="DL") 
       if(nrow(dl)>0)
       {
@@ -625,6 +632,7 @@ if (Export.dat=="YES")
         write.csv(dl,paste(hndl,NN,'/',NN,
                            "_Size_composition_dropline.csv",sep=''),row.names=F)
       }
+      
       tr=dd1%>%filter(Method=="TW") 
       if(nrow(tr)>0)
       {
@@ -632,8 +640,8 @@ if (Export.dat=="YES")
         write.csv(tr,paste(hndl,NN,'/',NN,
                            "_Size_composition_Pilbara_Trawl.csv",sep=''),row.names=F)
       }
-      rm(gn,ll,tr,dl)
       
+      rm(gn,ll,tr,dl)
       print(paste('----Exporting length composition for ----------',NN))
     }
   }
