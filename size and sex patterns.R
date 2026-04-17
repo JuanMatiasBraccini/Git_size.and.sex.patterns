@@ -539,8 +539,7 @@ if(do.dis2)
   }
 }
 
-
-#Export size frequency other gears data for population dynamics modelling
+# Export size data for population dynamics modelling -------------------------------------------------------------------------
 if (Export.dat=="YES")
 {
   hndl=handl_OneDrive('Analyses/Data_outs/')
